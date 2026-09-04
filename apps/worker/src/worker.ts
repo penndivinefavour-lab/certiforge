@@ -1,48 +1,64 @@
 // CertiForge Worker - Background job processor for certificate generation
-import { Queue, Worker } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
-import { generateCert } from '@/pdf-engine';
 
 const prisma = new PrismaClient();
 
-const QUEUE_NAME = 'certiforge:generation';
-
-async function main() {
-  const queue = new Queue(QUEUE_NAME, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-    },
-  });
-
-  const worker = new Worker(QUEUE_NAME, async (job) => {
-    const { templateId, recipientIds } = job.data;
-    
-    for (const recipientId of recipientIds) {
-      await generateCert(templateId, recipientId);
-    }
-  }, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-    },
-  });
-
-  worker.on('completed', async (job) => {
-    await prisma.generationJob.update({
-      where: { id: job.id },
-      data: { status: 'COMPLETED' }
-    });
-  });
-
-  worker.on('failed', async (job, err) => {
-    await prisma.generationJob.update({
-      where: { id: job.id },
-      data: { status: 'FAILED', error: err.message }
-    });
-  });
-
-  console.log('Worker started');
+interface GenerationPayload {
+  projectId: string;
+  recipientIds: string[];
+  templateVersionId: string;
 }
 
-main().catch(console.error);
+async function processGenerationJob(payload: GenerationPayload) {
+  for (const recipientId of payload.recipientIds) {
+    try {
+      const recipient = await prisma.recipient.findUnique({ where: { id: recipientId } });
+      if (!recipient) {
+        console.warn(`Missing recipient: ${recipientId}`);
+        continue;
+      }
+
+      const templateVersion = await prisma.templateVersion.findFirst({
+        where: { template: { projectId: payload.projectId } },
+        orderBy: { version: 'desc' },
+      });
+
+      if (!templateVersion) {
+        console.warn(`Missing template version for project: ${payload.projectId}`);
+        continue;
+      }
+
+      const project = await prisma.project.findUnique({ where: { id: payload.projectId } });
+      if (!project) {
+        console.warn(`Missing project: ${payload.projectId}`);
+        continue;
+      }
+
+      const certificateNumber = `CERT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0')}`;
+      const verificationToken = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+
+      await prisma.certificate.create({
+        data: {
+          projectId: payload.projectId,
+          recipientId,
+          templateVersionId: templateVersion.id,
+          certificateNumber,
+          verificationToken,
+          status: 'DRAFT',
+          metadata: JSON.stringify({}),
+        },
+      });
+    } catch (error) {
+      console.error('Worker item failed:', error);
+    }
+  }
+}
+
+async function main() {
+  console.log('Worker started in local mode');
+}
+
+main().catch((error) => {
+  console.error('Worker failed:', error);
+  process.exit(1);
+});

@@ -2,23 +2,24 @@
   "name": "certiforge",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "db:migrate": "pnpm prisma migrate dev",
-    "db:push": "pnpm prisma db push",
-    "db:seed": "pnpm tsx prisma/seed.ts",
-    "db:studio": "pnpm prisma studio",
-    "worker": "pnpm --filter worker dev"
+    "lint": "oxlint",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed"
   },
   "devDependencies": {
+    "@vitest/ui": "^1.6.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.0",
-    "@playwright/test": "^1.48.0"
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^1.6.1"
   },
   "packageManager": "pnpm@10.12.0"
 }

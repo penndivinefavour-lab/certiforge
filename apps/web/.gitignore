@@ -30,3 +30,4 @@ Thumbs.db
 .C:UsersUSERcertiforgedir.txt
 
 .vercel
+.env*

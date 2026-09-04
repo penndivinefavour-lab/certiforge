@@ -10,17 +10,15 @@
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
-    "ioredis": "^5.4.0",
-    "bullmq": "^5.19.0",
     "pdf-lib": "^1.17.0",
     "qrcode": "^1.5.3",
     "archiver": "^7.0.0",
-    "fabric": "^6.0.0",
-    "sharp": "^0.33.0"
+    "@certiforge/certificate-engine": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/archiver": "^6.0.0",
+    "@types/qrcode": "^1.5.0",
     "typescript": "^5.6.0",
     "tsx": "^4.19.0"
   }
