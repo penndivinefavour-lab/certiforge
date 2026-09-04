@@ -1,18 +1,36 @@
-// CertiForge Database Client (self-contained)
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-
-declare global {
-  var prisma: PrismaClient | undefined;
-}
+// CertiForge Database Client (raw PostgreSQL queries)
+import { Client } from 'pg';
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://certiforge:certiforge123@localhost:5432/certiforge';
 
-// Prisma v7 requires a driver adapter
-const adapter = new PrismaPg({ connectionString: DATABASE_URL });
+const client = new Client({ connectionString: DATABASE_URL });
 
-export const prisma = global.prisma || new PrismaClient({ adapter });
-
-if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
+async function connect() {
+  try {
+    await client.connect();
+    return true;
+  } catch (error) {
+    console.error('Database connection error:', error.message);
+    return false;
+  }
 }
+
+async function disconnect() {
+  await client.end();
+}
+
+async function query(text: string, params?: any[]) {
+  const result = await client.query(text, params);
+  return result.rows;
+}
+
+async function queryOne(text: string, params?: any[]) {
+  const result = await client.query(text, params);
+  return result.rows[0] || null;
+}
+
+async function execute(text: string, params?: any[]) {
+  await client.query(text, params);
+}
+
+export { connect, disconnect, query, queryOne, execute, client };
