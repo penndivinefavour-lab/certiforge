@@ -1,5 +1,5 @@
 // CertiForge Database Client (raw PostgreSQL queries)
-import { Client } from 'pg';
+const { Client } = require('pg');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://certiforge:certiforge123@localhost:5432/certiforge';
 
@@ -8,6 +8,7 @@ const client = new Client({ connectionString: DATABASE_URL });
 async function connect() {
   try {
     await client.connect();
+    console.log('Database connected');
     return true;
   } catch (error) {
     console.error('Database connection error:', error.message);
@@ -19,18 +20,21 @@ async function disconnect() {
   await client.end();
 }
 
-async function query(text: string, params?: any[]) {
+async function query(text, params) {
+  await connect();
   const result = await client.query(text, params);
   return result.rows;
 }
 
-async function queryOne(text: string, params?: any[]) {
+async function queryOne(text, params) {
+  await connect();
   const result = await client.query(text, params);
   return result.rows[0] || null;
 }
 
-async function execute(text: string, params?: any[]) {
+async function execute(text, params) {
+  await connect();
   await client.query(text, params);
 }
 
-export { connect, disconnect, query, queryOne, execute, client };
+module.exports = { connect, disconnect, query, queryOne, execute, client };

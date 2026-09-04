@@ -1,198 +1,97 @@
-// CertiForge Auth (self-contained)
-import bcrypt from "bcryptjs";
-import { prisma } from "./db";
-import { SignJWT, jwtVerify } from "jose";
+// CertiForge Auth (self-contained with raw pg)
+const bcrypt = require('bcryptjs');
+const { queryOne, query, execute } = require('@/lib/db');
 
 const SALT_ROUNDS = 12;
 
-export interface CreateUserInput {
-  email: string;
-  name: string;
-  password: string;
-}
-
-export interface SessionUser {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl: string | null;
-}
-
-function jwtSecret() {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error("SESSION_SECRET must be set and at least 32 characters");
-  }
-  return new TextEncoder().encode(secret);
-}
-
-export async function hashPassword(password: string): Promise<string> {
+async function hashPassword(password) {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+async function verifyPassword(password, hash) {
   return bcrypt.compare(password, hash);
 }
 
-export async function createUser(input: CreateUserInput) {
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+async function createUser(input) {
+  const existing = await queryOne('SELECT id FROM users WHERE email = $1', [input.email.toLowerCase().trim()]);
   if (existing) {
-    throw new Error("User with this email already exists");
+    throw new Error('User with this email already exists');
   }
 
   const passwordHash = await hashPassword(input.password);
+  const userId = require('crypto').randomUUID();
 
-  return prisma.user.create({
-    data: {
-      email: input.email.toLowerCase().trim(),
-      name: input.name.trim(),
-      password: passwordHash,
-      avatarUrl: null,
-    },
-  });
+  await execute(
+    'INSERT INTO users (id, email, name, password, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW())',
+    [userId, input.email.toLowerCase().trim(), input.name.trim(), passwordHash]
+  );
+
+  return { id: userId, email: input.email.toLowerCase().trim(), name: input.name.trim() };
 }
 
-export async function authenticateUser(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+async function authenticateUser(email, password) {
+  const user = await queryOne('SELECT id, email, name, password FROM users WHERE email = $1', [email.toLowerCase()]);
   if (!user) return null;
 
   const valid = await verifyPassword(password, user.password);
   if (!valid) return null;
 
-  return user;
+  return { id: user.id, email: user.email, name: user.name };
 }
 
-export async function createSession(userId: string, expiresInDays = 7) {
+async function createSession(userId, expiresInDays = 7) {
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
-  const token = crypto.randomUUID() + "." + Date.now().toString(36);
+  const token = require('crypto').randomUUID() + '.' + Date.now().toString(36);
 
-  const session = await prisma.session.create({
-    data: {
-      userId,
-      token,
-      expiresAt,
-    },
-  });
+  await execute(
+    'INSERT INTO sessions (id, "userId", token, "expiresAt", "createdAt") VALUES ($1, $2, $3, $4, NOW())',
+    [require('crypto').randomUUID(), userId, token, expiresAt]
+  );
 
-  return session.token;
+  return token;
 }
 
-export async function getSession(token: string) {
+async function getSession(token) {
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
-    where: { token },
-    include: { user: true },
-  });
-
-  if (!session) return null;
-  if (session.expiresAt < new Date()) {
-    await prisma.session.delete({ where: { id: session.id } });
-    return null;
-  }
+  const session = await queryOne(
+    `SELECT s.id, s."userId", s.token, s."expiresAt",
+            u.id as "userId", u.email, u.name, u."avatarUrl"
+     FROM "sessions" s
+     JOIN "users" u ON s."userId" = u.id
+     WHERE s.token = $1 AND s."expiresAt" > NOW()`,
+    [token]
+  );
 
   return session;
 }
 
-export async function deleteSession(token: string): Promise<void> {
-  await prisma.session.deleteMany({ where: { token } }).catch(() => {});
+async function deleteSession(token) {
+  await execute('DELETE FROM sessions WHERE token = $1', [token]).catch(() => {});
 }
 
-export async function getUserFromSession(session: any) {
+async function getUserFromSession(session) {
   if (!session) return null;
   return {
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    avatarUrl: session.user.avatarUrl,
+    id: session.id,
+    email: session.email,
+    name: session.name,
+    avatarUrl: session.avatarUrl,
   };
 }
 
-// JWT helpers for API token auth
-export interface TokenPayload {
-  userId: string;
-  type: "api_key";
+function generateVerificationToken() {
+  return require('crypto').randomUUID().replace(/-/g, '').slice(0, 32);
 }
 
-export async function createApiToken(payload: TokenPayload): Promise<string> {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("30d")
-    .sign(jwtSecret());
-}
-
-export async function verifyApiToken(token: string): Promise<TokenPayload | null> {
-  try {
-    const { payload } = await jwtVerify(token, jwtSecret());
-    return payload as TokenPayload;
-  } catch {
-    return null;
-  }
-}
-
-// Verification token helper
-export function generateVerificationToken(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 32);
-}
-
-// Organization membership helpers
-export type OrganizationMemberWithOrg = {
-  id: string;
-  role: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
-  organizationId: string;
-  organization: {
-    id: string;
-    name: string;
-    slug: string;
-  };
+module.exports = {
+  hashPassword,
+  verifyPassword,
+  createUser,
+  authenticateUser,
+  createSession,
+  getSession,
+  deleteSession,
+  getUserFromSession,
+  generateVerificationToken,
 };
-
-export async function getOrganizationMembership(
-  userId: string,
-  organizationId: string
-): Promise<OrganizationMemberWithOrg | null> {
-  const member = await prisma.organizationMember.findUnique({
-    where: {
-      organizationId_userId: { organizationId, userId },
-    },
-    include: {
-      organization: {
-        select: { id: true, name: true, slug: true },
-      },
-    },
-  });
-
-  if (!member) return null;
-
-  return {
-    id: member.id,
-    role: member.role as "OWNER" | "ADMIN" | "EDITOR" | "VIEWER",
-    organizationId: member.organizationId,
-    organization: member.organization,
-  };
-}
-
-export async function requirePermission(
-  userId: string,
-  organizationId: string,
-  minimumRole: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER"
-): Promise<OrganizationMemberWithOrg> {
-  const member = await getOrganizationMembership(userId, organizationId);
-  if (!member) {
-    throw new Error("You do not have access to this organization");
-  }
-
-  const roleHierarchy: Record<string, number> = {
-    OWNER: 4,
-    ADMIN: 3,
-    EDITOR: 2,
-    VIEWER: 1,
-  };
-
-  if (roleHierarchy[member.role] < roleHierarchy[minimumRole]) {
-    throw new Error("You do not have permission to perform this action");
-  }
-
-  return member;
-}
