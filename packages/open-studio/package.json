@@ -1,0 +1,19 @@
+{
+  "name": "@certiforge/open-studio",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/db.ts",
+  "types": "./src/db.ts",
+  "exports": {
+    ".": {
+      "import": "./src/db.ts",
+      "types": "./src/db.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

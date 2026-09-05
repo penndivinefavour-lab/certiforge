@@ -1,60 +1,97 @@
-// CertiForge Certificate ID Engine
-import { PrismaClient } from '@prisma/client';
+// Certificate ID Generator for Open Studio
+// Generates unique, collision-resistant certificate IDs
 
-const prisma = new PrismaClient();
-
-export interface CertificateIdConfig {
-  prefix: string;
-  yearLength: number;
-  sequenceLength: number;
+/**
+ * Generate a cryptographically random certificate ID
+ * Format: CF-XXXX-XXXX-XXXX (12 random chars)
+ */
+export function generateCertificateId(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude similar-looking chars
+  let id = 'CF-';
+  
+  for (let i = 0; i < 4; i++) {
+    id += chars.charAt(randomInt(chars.length));
+  }
+  id += '-';
+  
+  for (let i = 0; i < 4; i++) {
+    id += chars.charAt(randomInt(chars.length));
+  }
+  id += '-';
+  
+  for (let i = 0; i < 4; i++) {
+    id += chars.charAt(randomInt(chars.length));
+  }
+  
+  return id;
 }
 
-const DEFAULT_CONFIG: CertificateIdConfig = {
-  prefix: 'CERT',
-  yearLength: 4,
-  sequenceLength: 6
-};
-
-export function generateCertificateId(config: CertificateIdConfig = DEFAULT_CONFIG): string {
-  const year = new Date().getFullYear().toString().slice(-config.yearLength);
-  // Sequence will be determined by database
-  return `${config.prefix}-${year}-000001`;
+/**
+ * Generate a random integer between 0 and max (exclusive)
+ * Uses crypto.getRandomValues for cryptographically secure randomness
+ */
+function randomInt(max: number): number {
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return array[0] % max;
 }
 
-export async function claimCertificateNumber(projectId: string): Promise<string> {
-  return prisma.$transaction(async (tx) => {
-    // Lock the certificate_sequences row
-    const sequence = await tx.certificateSequence.findUniqueOrThrow({
-      where: { projectId }
-    });
-    
-    const year = new Date().getFullYear().toString();
-    const nextNum = sequence.currentNumber + 1;
-    
-    // Update sequence
-    await tx.certificateSequence.update({
-      where: { projectId },
-      data: { currentNumber: nextNum }
-    });
-    
-    // Format: CERT-2026-000001
-    return `CERT-${year}-${nextNum.toString().padStart(6, '0')}`;
+/**
+ * Generate a random UUID v4
+ */
+export function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15) as number;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
   });
 }
 
-export function parseCertificateId(id: string): { prefix: string; year: string; number: number } | null {
-  const match = id.match(/^(.+?)-(\d{4})-(\d+)$/);
-  if (!match) return null;
+/**
+ * Format certificate ID for display
+ */
+export function formatCertificateId(id: string): string {
+  if (id.startsWith('CF-')) return id;
   
-  return {
-    prefix: match[1],
-    year: match[2],
-    number: parseInt(match[3], 10)
-  };
+  // Convert UUID-like format to CF-XXXX-XXXX-XXXX
+  const clean = id.replace(/-/g, '').slice(0, 12).toUpperCase();
+  return `CF-${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
 }
 
-export function validateCertificateId(id: string, config: CertificateIdConfig = DEFAULT_CONFIG): boolean {
-  const year = new Date().getFullYear().toString();
-  const pattern = new RegExp(`^${config.prefix}-${year}-\\d{${config.sequenceLength}}$`);
-  return pattern.test(id);
+/**
+ * Validate certificate ID format
+ */
+export function isValidCertificateId(id: string): boolean {
+  return /^CF-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(id);
+}
+
+/**
+ * Generate verification token
+ */
+export function generateVerificationToken(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Create self-contained verification data for QR codes
+ */
+export function createVerificationPayload(
+  certificateId: string,
+  recipientName: string,
+  issuedAt: Date,
+  verificationToken: string
+): string {
+  const payload = {
+    id: certificateId,
+    name: recipientName,
+    issuedAt: issuedAt.toISOString(),
+    token: verificationToken,
+    verified: true,
+    platform: 'certiforge',
+    version: '1.0',
+  };
+  
+  return JSON.stringify(payload);
 }

@@ -2,6 +2,22 @@
 
 A professional digital certificate generation platform that allows organizations to design certificate templates, import recipients in bulk, generate personalized certificates, issue unique certificate IDs, verify certificates through QR codes, and manage certificate lifecycle events including revocation.
 
+## 🚀 Open Studio - No Account Required!
+
+**CertiForge now supports Open Studio** - create and generate certificates without signing up!
+
+### Open Studio Features:
+- ✅ Create projects without account
+- ✅ Upload and edit certificate templates
+- ✅ Import recipients from CSV
+- ✅ Generate PDF certificates
+- ✅ Download certificates
+- ✅ All data stored locally in your browser
+
+**Get started:** Visit the homepage and click "Start Creating — No Account Required"
+
+See [docs/OPEN_STUDIO_GUIDE.md](./docs/OPEN_STUDIO_GUIDE.md) for details.
+
 ## Features
 
 - **Certificate Template Management** — Design and manage certificate templates with a visual editor
@@ -21,6 +37,18 @@ A professional digital certificate generation platform that allows organizations
 
 ## How CertiForge Works
 
+### Open Studio Flow (No Account Required)
+
+1. **Start Creating** — Click "Start Creating" on the homepage
+2. **Create Project** — Give your project a name
+3. **Upload Template** — Upload a certificate template image
+4. **Edit Template** — Position elements with the visual editor
+5. **Import Recipients** — Upload CSV with recipient data
+6. **Generate Certificates** — Create PDFs instantly
+7. **Download** — Get your certificates as a ZIP file
+
+### Authenticated Flow (Full Features)
+
 1. **Create Project** — Set up a new certificate project within your organization
 2. **Upload Template** — Upload a certificate template image or design from scratch
 3. **Open Visual Editor** — Use the Fabric.js-based editor to position elements
@@ -38,12 +66,52 @@ A professional digital certificate generation platform that allows organizations
 ## Architecture
 
 ```
+CERTIFORGE
+    │
+    ├── LANDING PAGE (/)
+    │   ├── Open Studio CTA (primary)
+    │   └── Sign In (secondary)
+    │
+    ├── OPEN STUDIO (/studio/*)
+    │   ├── Browser-native persistence (IndexedDB)
+    │   ├── No authentication required
+    │   └── Local-only data storage
+    │
+    ├── AUTHENTICATED MODE (/dashboard, /auth/*)
+    │   ├── PostgreSQL database
+    │   ├── Organization management
+    │   └── Persistent cloud storage
+    │
+    └── SHARED ENGINE
+        ├── Certificate generation (pdf-lib)
+        ├── QR code generation (qrcode)
+        └── Template editing (Fabric.js)
+```
+
+### Storage Architecture
+
+| Mode | Storage | Persistence | Verification |
+|------|---------|-------------|--------------|
+| Open Studio | IndexedDB (browser) | Local only | Local only |
+| Account Mode | PostgreSQL | Cloud | Cross-device |
+
+See [docs/OPEN_STUDIO_ARCHITECTURE_AUDIT.md](./docs/OPEN_STUDIO_ARCHITECTURE_AUDIT.md) for detailed architecture.
+
+```
 certiforge/
 ├── apps/
 │   ├── web/                 # Next.js web application
-│   └── worker/              # Background job processor (simplified)
+│   │   ├── src/app/
+│   │   │   ├── studio/      # Open Studio routes (no auth)
+│   │   │   ├── api/studio/  # Open Studio API routes
+│   │   │   ├── auth/        # Authentication pages
+│   │   │   ├── dashboard/   # User dashboard
+│   │   │   └── projects/    # Project management
+│   │   └── src/lib/
+│   ├── worker/              # Background job processor (simplified)
 │
 ├── packages/
+│   ├── open-studio/         # Open Studio IndexedDB layer
 │   ├── database/            # Database client and queries
 │   ├── types/               # Shared TypeScript types
 │   ├── config/              # Configuration utilities
@@ -55,6 +123,9 @@ certiforge/
 │
 ├── prisma/                  # Database schema
 ├── docs/                    # Documentation
+│   ├── OPEN_STUDIO_ARCHITECTURE_AUDIT.md
+│   ├── OPEN_STUDIO_GUIDE.md
+│   └── PHASE5_IMPLEMENTATION_REPORT.md
 ├── tests/                   # Test suites
 ├── package.json
 ├── pnpm-workspace.yaml
@@ -79,8 +150,8 @@ certiforge/
 ### Prerequisites
 
 - Node.js 20+
-- pnpm 10.12.0+
-- PostgreSQL 14+
+- pnpm 10.12.0+ (or npm)
+- PostgreSQL 14+ (for authenticated mode)
 - Git
 
 ### Installation
@@ -88,11 +159,17 @@ certiforge/
 ```bash
 git clone https://github.com/penndivinefavour-lab/certiforge.git
 cd certiforge
-pnpm install
+npm install
 ```
 
 ### Environment Setup
 
+For **Open Studio only** (no database needed):
+```bash
+# Nothing required! Just run the dev server.
+```
+
+For **Authenticated mode** (requires database):
 ```bash
 cp apps/web/.env.example apps/web/.env.local
 ```
