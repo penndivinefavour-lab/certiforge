@@ -1,7 +1,7 @@
 // CertiForge PDF Engine - Server-side certificate rendering
 import { PDFDocument, rgb, degrees, StandardFonts, PageSizes } from 'pdf-lib';
-import { generateQRCode } from '@/qr';
-import type { Certificate, TemplateVersion, Recipient } from '@/types';
+import { generateQRCode } from '@certiforge/qr';
+import type { Certificate, TemplateVersion, Recipient } from '@certiforge/types';
 
 export interface RenderOptions {
   landscape?: boolean;
@@ -15,7 +15,7 @@ export async function renderCertificate(
   recipient: Recipient,
   cert: Certificate,
   options: RenderOptions = {}
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   // Load template PDF or create new one
   let pdfDoc: PDFDocument;
   
@@ -62,8 +62,11 @@ export async function renderCertificate(
         color: color
       });
     } else if (element.type === 'qr_code') {
-      const qrUrl = `${process.env.VERIFICATION_URL}/verify/${cert.certificateNumber}`;
-      const qrBytes = await generateQRCode(qrUrl, 100);
+      const qrUrl = `${process.env.VERIFICATION_URL || 'http://localhost:3000'}/studio/verify/${cert.certificateNumber}`;
+      const qrBuffer = await generateQRCode(qrUrl, 100);
+      
+      // Convert buffer to bytes
+      const qrBytes = new Uint8Array(qrBuffer);
       
       // In production, embed the QR code image
       // For now, skip embedding
@@ -71,7 +74,7 @@ export async function renderCertificate(
   }
   
   const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
+  return new Uint8Array(pdfBytes);
 }
 
 function getDynamicValue(

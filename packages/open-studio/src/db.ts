@@ -1,6 +1,9 @@
 // Open Studio IndexedDB Storage Layer
 // Provides local persistence for the no-auth certificate generation workflow
 
+// Ensure browser types are available
+/// <reference lib="dom" />
+
 const DB_NAME = 'certiforge-open-studio';
 const DB_VERSION = 1;
 
@@ -55,7 +58,7 @@ export interface OpenStudioCertificate {
   certificateNumber: string;
   verificationToken: string;
   status: 'DRAFT' | 'GENERATED' | 'ISSUED' | 'REVOKED';
-  pdfData?: string; // base64
+  pdfData?: string;
   qrData?: string;
   metadata?: Record<string, string>;
   issuedAt?: number;
@@ -72,6 +75,17 @@ export interface OpenStudioWorkspace {
   };
 }
 
+export interface OpenStudioGenerationJob {
+  id: string;
+  projectId: string;
+  status: string;
+  total: number;
+  completed?: number;
+  failed?: number;
+  createdAt: number;
+  completedAt?: number;
+}
+
 // Generate secure random ID
 function generateId(): string {
   const array = new Uint8Array(16);
@@ -79,35 +93,28 @@ function generateId(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Generate certificate ID in format CF-XXXX-XXXX-XXXX
-function generateCertificateId(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let id = 'CF-';
-  for (let i = 0; i < 4; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  id += '-';
-  for (let i = 0; i < 4; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  id += '-';
-  for (let i = 0; i < 4; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return id;
-}
-
 // Database class
 class OpenStudioDB {
   private db: IDBDatabase | null = null;
+  private initPromise: Promise<void> | null = null;
 
   async init(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    // Return existing promise if already initializing
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        this.initPromise = null;
+        reject(request.error);
+      };
+
       request.onsuccess = () => {
         this.db = request.result;
+        this.initPromise = null;
         resolve();
       };
 
@@ -157,6 +164,8 @@ class OpenStudioDB {
         }
       };
     });
+
+    return this.initPromise;
   }
 
   private async withStore<T>(
@@ -164,13 +173,23 @@ class OpenStudioDB {
     mode: IDBTransactionMode,
     callback: (store: IDBObjectStore) => Promise<T>
   ): Promise<T> {
-    if (!this.db) await this.init();
+    if (!this.db) {
+      await this.init();
+    }
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([storeName], mode);
       const store = transaction.objectStore(storeName);
-      callback(store).then(resolve).catch(reject);
-      transaction.oncomplete = () => resolve({} as T);
-      transaction.onerror = () => reject(transaction.error);
+      
+      callback(store)
+        .then(resolve)
+        .catch(reject);
+      
+      transaction.oncomplete = () => {
+        // Only resolve if not already resolved
+        if (resolve === undefined) return;
+      };
+      transaction.onerror = (event) => reject(transaction.error);
     });
   }
 
@@ -189,7 +208,10 @@ class OpenStudioDB {
               createdAt: Date.now(),
               updatedAt: Date.now(),
             };
-            this.withStore(STORES.WORKSPACES, 'readwrite', (s) => s.put(workspace)).then(() => resolve(workspace));
+            // Create and resolve in same promise chain
+            const addRequest = store.add(workspace);
+            addRequest.onsuccess = () => resolve(workspace);
+            addRequest.onerror = () => reject(addRequest.error);
           }
         };
         request.onerror = () => reject(request.error);
@@ -208,7 +230,7 @@ class OpenStudioDB {
   }
 
   async getWorkspace(workspaceId: string): Promise<OpenStudioWorkspace | null> {
-    return this.withStore(STORES.WORKSPACES, 'readonly', async (store) => {
+    return this.withStore(STORES.WORKSPACES, 'readonly', (store) => {
       return new Promise((resolve, reject) => {
         const request = store.get(workspaceId);
         request.onsuccess = () => resolve(request.result || null);
@@ -225,7 +247,13 @@ class OpenStudioDB {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    await this.withStore(STORES.PROJECTS, 'readwrite', (store) => store.put(newProject));
+    await this.withStore(STORES.PROJECTS, 'readwrite', (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.add(newProject);
+        request.onsuccess = () => resolve(newProject);
+        request.onerror = () => reject(request.error);
+      });
+    });
     return newProject;
   }
 
@@ -261,11 +289,12 @@ class OpenStudioDB {
   }
 
   async deleteProject(projectId: string): Promise<boolean> {
-    return this.withStore(STORES.PROJECTS, 'readwrite', async (store) => {
-      const project = await this.getProject(projectId);
-      if (!project) return false;
-      store.delete(projectId);
-      return true;
+    return this.withStore(STORES.PROJECTS, 'readwrite', (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.delete(projectId);
+        request.onsuccess = () => resolve(true);
+        request.onerror = () => reject(request.error);
+      });
     });
   }
 
@@ -277,7 +306,13 @@ class OpenStudioDB {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    await this.withStore(STORES.TEMPLATES, 'readwrite', (store) => store.put(newTemplate));
+    await this.withStore(STORES.TEMPLATES, 'readwrite', (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.add(newTemplate);
+        request.onsuccess = () => resolve(newTemplate);
+        request.onerror = () => reject(request.error);
+      });
+    });
     return newTemplate;
   }
 
@@ -329,7 +364,13 @@ class OpenStudioDB {
       id: generateId(),
       createdAt: Date.now(),
     };
-    await this.withStore(STORES.RECIPIENTS, 'readwrite', (store) => store.put(newRecipient));
+    await this.withStore(STORES.RECIPIENTS, 'readwrite', (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.add(newRecipient);
+        request.onsuccess = () => resolve(newRecipient);
+        request.onerror = () => reject(request.error);
+      });
+    });
     return newRecipient;
   }
 
@@ -380,11 +421,17 @@ class OpenStudioDB {
       id: generateId(),
       createdAt: Date.now(),
     }));
+    
     await this.withStore(STORES.RECIPIENTS, 'readwrite', async (store) => {
       for (const recipient of created) {
-        store.put(recipient);
+        await new Promise<void>((resolve, reject) => {
+          const request = store.add(recipient);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
       }
     });
+    
     return created;
   }
 
@@ -395,7 +442,13 @@ class OpenStudioDB {
       id: generateId(),
       createdAt: Date.now(),
     };
-    await this.withStore(STORES.CERTIFICATES, 'readwrite', (store) => store.put(newCertificate));
+    await this.withStore(STORES.CERTIFICATES, 'readwrite', (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.add(newCertificate);
+        request.onsuccess = () => resolve(newCertificate);
+        request.onerror = () => reject(request.error);
+      });
+    });
     return newCertificate;
   }
 
@@ -425,7 +478,10 @@ class OpenStudioDB {
       const index = store.index('certificateNumber');
       return new Promise((resolve, reject) => {
         const request = index.getAll(certificateNumber);
-        request.onsuccess = () => resolve((request.result as OpenStudioCertificate[])[0] || null);
+        request.onsuccess = () => {
+          const results = request.result as OpenStudioCertificate[];
+          resolve(results[0] || null);
+        };
         request.onerror = () => reject(request.error);
       });
     });
@@ -452,11 +508,22 @@ class OpenStudioDB {
   }
 
   // Generation jobs
-  async createGenerationJob(job: { id: string; projectId: string; status: string; total: number; createdAt: number }): Promise<void> {
-    await this.withStore(STORES.GENERATION_JOBS, 'readwrite', (store) => store.put(job));
+  async createGenerationJob(job: Omit<OpenStudioGenerationJob, 'id'>): Promise<OpenStudioGenerationJob> {
+    const newJob: OpenStudioGenerationJob = {
+      ...job,
+      id: generateId(),
+    };
+    await this.withStore(STORES.GENERATION_JOBS, 'readwrite', (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.add(newJob);
+        request.onsuccess = () => resolve(newJob);
+        request.onerror = () => reject(request.error);
+      });
+    });
+    return newJob;
   }
 
-  async updateGenerationJob(jobId: string, updates: any): Promise<void> {
+  async updateGenerationJob(jobId: string, updates: Partial<OpenStudioGenerationJob>): Promise<void> {
     return this.withStore(STORES.GENERATION_JOBS, 'readwrite', async (store) => {
       const job = await this.getGenerationJob(jobId);
       if (!job) throw new Error('Job not found');
@@ -464,7 +531,7 @@ class OpenStudioDB {
     });
   }
 
-  async getGenerationJob(jobId: string): Promise<any> {
+  async getGenerationJob(jobId: string): Promise<OpenStudioGenerationJob | null> {
     return this.withStore(STORES.GENERATION_JOBS, 'readonly', (store) => {
       return new Promise((resolve, reject) => {
         const request = store.get(jobId);
@@ -497,25 +564,56 @@ class OpenStudioDB {
     return { workspace, projects, templates, recipients, certificates };
   }
 
-  async importWorkspace(data: any): Promise<void> {
-    // This would restore from exported data
-    // Implementation omitted for brevity
-  }
-
   async clearAll(): Promise<void> {
-    await this.withStore(STORES.WORKSPACES, 'readwrite', (store) => store.clear());
-    await this.withStore(STORES.PROJECTS, 'readwrite', (store) => store.clear());
-    await this.withStore(STORES.TEMPLATES, 'readwrite', (store) => store.clear());
-    await this.withStore(STORES.RECIPIENTS, 'readwrite', (store) => store.clear());
-    await this.withStore(STORES.CERTIFICATES, 'readwrite', (store) => store.clear());
-    await this.withStore(STORES.GENERATION_JOBS, 'readwrite', (store) => store.clear());
+    await this.withStore(STORES.WORKSPACES, 'readwrite', async (store) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+    await this.withStore(STORES.PROJECTS, 'readwrite', async (store) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+    await this.withStore(STORES.TEMPLATES, 'readwrite', async (store) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+    await this.withStore(STORES.RECIPIENTS, 'readwrite', async (store) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+    await this.withStore(STORES.CERTIFICATES, 'readwrite', async (store) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+    await this.withStore(STORES.GENERATION_JOBS, 'readwrite', async (store) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
   }
 }
 
 // Singleton instance
 export const openStudioDB = new OpenStudioDB();
 
-// Initialize on import
+// Initialize on import (best-effort, don't block)
 openStudioDB.init().catch(console.error);
 
 // Helper to get current workspace

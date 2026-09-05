@@ -1,14 +1,13 @@
 // CertiForge QR Code Generator
 import QRCode from 'qrcode';
-import type { Buffer } from 'buffer';
 
-export async function generateQRCode(text: string, size: number = 200): Promise<Buffer> {
+export async function generateQRCode(text: string, size: number = 200): Promise<Uint8Array> {
   const buffer = await QRCode.toBuffer(text, {
     width: size,
     margin: 1,
     errorCorrectionLevel: 'M'
   });
-  return buffer;
+  return buffer as unknown as Uint8Array;
 }
 
 export async function generateQRCodeSVG(text: string, size: number = 200): Promise<string> {

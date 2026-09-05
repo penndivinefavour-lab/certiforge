@@ -1,6 +1,6 @@
 // Open Studio Template API
 import { NextResponse } from 'next/server';
-import { openStudioDB } from 'open-studio';
+import { openStudioDB } from '@certiforge/open-studio';
 
 export async function PATCH(
   request: Request,

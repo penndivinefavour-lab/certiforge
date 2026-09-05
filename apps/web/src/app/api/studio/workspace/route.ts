@@ -1,6 +1,6 @@
 // Open Studio Workspace API
 import { NextResponse } from 'next/server';
-import { openStudioDB } from 'open-studio';
+import { openStudioDB } from '@certiforge/open-studio';
 
 // Workspace
 export async function GET() {

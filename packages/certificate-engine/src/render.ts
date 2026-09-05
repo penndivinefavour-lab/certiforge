@@ -1,9 +1,8 @@
 // PDF Rendering Engine - deterministic server-side certificate rendering
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import QRCode from "qrcode";
-import { prisma } from "../../database/src/client";
-import { getTemplateVersion } from "../../database/src/organizations";
-import type { TemplateVersion, TemplateElement, ElementData, Certificate, Recipient } from "@certiforge/types";
+import { PDFDocument, rgb, StandardFonts, PDFPage } from "pdf-lib";
+import { generateQRCode } from "@certiforge/qr";
+import type { TemplateVersion, TemplateElement, Certificate, Recipient } from "@certiforge/types";
+import type { ElementData } from "./types";
 
 // ============================================================================
 // PDF RENDERER
@@ -431,7 +430,7 @@ export async function renderCertificate(
     const data = JSON.parse(element.data) as ElementData;
 
     try {
-      switch (element.type) {
+      switch ((element.type || '').toUpperCase()) {
         case "TEXT":
           await renderTextElement(page, element, data);
           break;

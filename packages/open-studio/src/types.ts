@@ -1,4 +1,4 @@
-// Types for Open Studio
+// Open Studio Types - exported for TypeScript
 export interface OpenStudioProject {
   id: string;
   workspaceId: string;
@@ -54,4 +54,15 @@ export interface OpenStudioWorkspace {
     orgName?: string;
     lastProjectId?: string;
   };
+}
+
+export interface OpenStudioGenerationJob {
+  id: string;
+  projectId: string;
+  status: string;
+  total: number;
+  completed?: number;
+  failed?: number;
+  createdAt: number;
+  completedAt?: number;
 }

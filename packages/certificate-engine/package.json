@@ -19,9 +19,11 @@
   "dependencies": {
     "@certiforge/types": "workspace:*",
     "@certiforge/pdf-engine": "workspace:*",
-    "@certiforge/qr": "workspace:*"
+    "@certiforge/qr": "workspace:*",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "@types/node": "^20.0.0"
   }
 }

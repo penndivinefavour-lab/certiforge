@@ -1,9 +1,8 @@
 // Open Studio Generation API (No Auth Required)
 import { NextResponse } from 'next/server';
-import { openStudioDB, getCurrentWorkspace } from 'open-studio';
-import { renderCertificate } from 'certificate-engine';
-import { generateQRCode } from 'qr';
-import { generateCertificateId, generateVerificationToken } from 'certificate-engine';
+import { openStudioDB } from '@certiforge/open-studio';
+import { renderCertificate, generateCertificateId, generateVerificationToken } from '@certiforge/certificate-engine';
+import { generateQRCode } from '@certiforge/qr';
 
 export async function POST(
   request: Request,
@@ -44,7 +43,6 @@ export async function POST(
     // Create generation job
     const jobId = generateCertificateId();
     await openStudioDB.createGenerationJob({
-      id: jobId,
       projectId,
       status: 'PROCESSING',
       total: recipients.length,
@@ -124,8 +122,8 @@ export async function POST(
           certificateNumber,
           verificationToken,
           status: 'GENERATED',
-          pdfData: rendered.pdfBytes ? `data:application/pdf;base64,${Buffer.from(rendered.pdfBytes).toString('base64')}` : undefined,
-          qrData: qrDataUrl,
+          pdfData: rendered.pdfBytes ? `data:application/pdf;base64,${btoa(String.fromCharCode(...rendered.pdfBytes))}` : undefined,
+          qrData: qrDataUrl as string,
           metadata: dynamicValues,
           issuedAt: Date.now(),
         });

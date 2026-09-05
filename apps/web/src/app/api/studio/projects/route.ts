@@ -1,6 +1,6 @@
 // Open Studio Projects API
 import { NextResponse } from 'next/server';
-import { openStudioDB, getCurrentWorkspace } from 'open-studio';
+import { openStudioDB, getCurrentWorkspace } from '@certiforge/open-studio';
 
 export async function GET() {
   try {

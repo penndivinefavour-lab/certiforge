@@ -27,7 +27,7 @@ describe('Open Studio - Certificate ID Generation', () => {
   it('should generate valid certificate IDs', () => {
     // Test the ID format
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const id = 'CF-';
+    let id = 'CF-';
     for (let i = 0; i < 12; i++) {
       if (i > 0 && i % 4 === 0) id += '-';
       id += chars.charAt(Math.floor(Math.random() * chars.length));

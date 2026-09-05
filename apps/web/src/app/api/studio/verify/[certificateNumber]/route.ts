@@ -1,6 +1,6 @@
 // Open Studio Verify API (No Auth Required)
 import { NextResponse } from 'next/server';
-import { openStudioDB } from 'open-studio';
+import { openStudioDB } from '@certiforge/open-studio';
 
 export async function GET(
   request: Request,

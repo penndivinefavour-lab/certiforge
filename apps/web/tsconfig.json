@@ -20,12 +20,20 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "open-studio": ["../../packages/open-studio/src/index.ts"],
-      "open-studio/*": ["../../packages/open-studio/src/*"],
-      "certificate-engine": ["../../packages/certificate-engine/src/index.ts"],
-      "certificate-engine/*": ["../../packages/certificate-engine/src/*"],
-      "qr": ["../../packages/qr/src/index.ts"],
-      "qr/*": ["../../packages/qr/src/*"]
+      "@certiforge/open-studio": ["../../packages/open-studio/src/index.ts"],
+      "@certiforge/open-studio/*": ["../../packages/open-studio/src/*"],
+      "@certiforge/certificate-engine": ["../../packages/certificate-engine/src/index.ts"],
+      "@certiforge/certificate-engine/*": ["../../packages/certificate-engine/src/*"],
+      "@certiforge/qr": ["../../packages/qr/src/index.ts"],
+      "@certiforge/qr/*": ["../../packages/qr/src/*"],
+      "@certiforge/types": ["../../packages/types/src/index.ts"],
+      "@certiforge/types/*": ["../../packages/types/src/*"],
+      "@certiforge/pdf-engine": ["../../packages/pdf-engine/src/index.ts"],
+      "@certiforge/pdf-engine/*": ["../../packages/pdf-engine/src/*"],
+      "@certiforge/validation": ["../../packages/validation/src/index.ts"],
+      "@certiforge/validation/*": ["../../packages/validation/src/*"],
+      "@certiforge/editor": ["../../packages/editor/src/index.ts"],
+      "@certiforge/editor/*": ["../../packages/editor/src/*"]
     }
   },
   "include": [
