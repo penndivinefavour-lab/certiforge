@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface ParsedRow {
   rowNumber: number;
+  recipientId?: string;
   data: Record<string, string>;
   errors: string[];
 }
@@ -49,6 +50,7 @@ export default function ImportPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapping, setMapping] = useState({
     recipientName: "",
@@ -414,13 +416,13 @@ export default function ImportPage() {
     <main className="container mx-auto px-6 py-6">
       <div className="flex items-center gap-4 mb-6">
         <h2 className="text-lg font-semibold">Preview</h2>
-        <span className="badge badge-primary">{importResult?.totalRows} rows</span>
+        <span className="badge badge-primary">{importResult?.import.totalRows} rows</span>
         <span className="badge" style={{ background: "hsl(140 60% 15%)", color: "hsl(140 60% 75%)" }}>
-          {importResult?.validRows} valid
+          {importResult?.import.validRows} valid
         </span>
-        {importResult?.invalidRows > 0 && (
+        {importResult?.import.invalidRows > 0 && (
           <span className="badge" style={{ background: "hsl(0 65% 15%)", color: "hsl(0 65% 75%)" }}>
-            {importResult?.invalidRows} invalid
+            {importResult?.import.invalidRows} invalid
           </span>
         )}
       </div>
@@ -613,7 +615,7 @@ export default function ImportPage() {
         <button onClick={() => setStep("preview")} className="btn btn-ghost btn-sm">
           Back
         </button>
-        {importResult?.invalidRows > 0 ? (
+        {importResult?.import.invalidRows > 0 ? (
           <button onClick={saveMapping} disabled={uploading} className="btn btn-primary">
             {uploading ? "Saving..." : "Review validation"}
           </button>

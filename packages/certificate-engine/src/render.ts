@@ -1,5 +1,5 @@
 // PDF Rendering Engine - deterministic server-side certificate rendering
-import { PDFDocument, rgb, StandardFonts, type PDFDocumentEmbedPngOptions } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, PDFFont } from "pdf-lib";
 import { generateQRCode } from "@certiforge/qr";
 import type { TemplateVersion, TemplateElement, Certificate, Recipient } from "@certiforge/types";
 import type { ElementData } from "./types";
@@ -9,7 +9,7 @@ import type { ElementData } from "./types";
 // ============================================================================
 
 export interface RenderOptions {
-  width: number;           // in points (1pt = 1/72 inch)
+  width: number;
   height: number;
   backgroundColor?: string;
   orientation: "PORTRAIT" | "LANDSCAPE";
@@ -22,16 +22,24 @@ export interface RenderedCertificate {
   recipientName: string;
 }
 
-// Font size units - A4 is 595.28 x 841.89 points
 const FONT_SIZE_DEFAULT = 12;
 const FONT_SIZE_MIN = 6;
-const FONT_SIZE_MAX = 72;
-const DEFAULT_FONT_FAMILY = "Helvetica";
-const DEFAULT_COLOR = "#000000";
-const QR_SIZE = 100; // points
+const QR_SIZE = 100;
 
-// Get the Helvetica font from pdf-lib
-const helveticaFont = StandardFonts.Helvetica;
+// Helper to get embedded font
+async function getFont(doc: PDFDocument, weight: string = "NORMAL"): Promise<PDFFont> {
+  const upper = weight.toUpperCase();
+  if (upper === "BOLD" || upper === "700" || upper === "SEMIBOLD") {
+    return doc.embedFont(StandardFonts.HelveticaBold);
+  }
+  if (upper === "ITALIC" || upper === "OBLIQUE") {
+    return doc.embedFont(StandardFonts.HelveticaOblique);
+  }
+  if (upper === "BOLDITALIC" || upper === "BOLD OBLIQUE") {
+    return doc.embedFont(StandardFonts.HelveticaBoldOblique);
+  }
+  return doc.embedFont(StandardFonts.Helvetica);
+}
 
 // Convert hex color to pdf-lib rgb
 function hexToRgb(hex: string) {
@@ -42,32 +50,18 @@ function hexToRgb(hex: string) {
   return rgb(r, g, b);
 }
 
-// Parse font weight to PDF font style
-function parseFontWeight(weight: string): { font: any; bold: boolean } {
-  const upper = weight.toUpperCase();
-  if (upper === "BOLD" || upper === "700" || upper === "SEMIBOLD") {
-    return { font: StandardFonts.HelveticaBold, bold: true };
-  }
-  if (upper === "ITALIC" || upper === "OBLIQUE") {
-    return { font: StandardFonts.HelveticaOblique, bold: false };
-  }
-  return { font: helveticaFont, bold: false };
-}
-
-// Smart text fitting: reduce font size if text overflows container
-function fitText(
+// Smart text fitting
+async function fitText(
+  doc: PDFDocument,
   text: string,
   maxWidth: number,
   initialSize: number,
-  font: any,
+  font: PDFFont,
   minSize: number = FONT_SIZE_MIN
-): number {
+): Promise<number> {
   let size = initialSize;
-
-  // Measure text width at current size
   const width = font.widthOfTextAtSize(text, size);
 
-  // Reduce size if needed
   while (width > maxWidth && size > minSize) {
     size -= 0.5;
     if (size < minSize) size = minSize;
@@ -83,12 +77,11 @@ async function renderTextElement(
   page: any,
   element: TemplateElement,
   data: ElementData,
-  fontSizeScale: number = 1
+  doc: PDFDocument
 ) {
   const textData = data as ElementData & {
     text: string;
     fontSize: number;
-    fontFamily: string;
     fontWeight: string;
     color: string;
     textAlign: "left" | "center" | "right";
@@ -103,20 +96,20 @@ async function renderTextElement(
   // Resolve dynamic field value
   let renderText = textData.text || "";
   if (textData.dynamicField) {
-    // For preview, show the field name in a smaller size
     renderText = textData.dynamicField;
   }
 
-  const fontSize = textData.fontSize * fontSizeScale;
-  const color = hexToRgb(textData.color || DEFAULT_COLOR);
+  const fontSize = textData.fontSize || FONT_SIZE_DEFAULT;
+  const font = await getFont(doc, textData.fontWeight);
+  const color = hexToRgb(textData.color || "#000000");
   const opacity = (textData.opacity ?? 1) as number;
 
   // Handle smart text fitting
-  const maxTextWidth = element.width * 0.9; // 90% of element width for padding
+  const maxTextWidth = element.width * 0.9;
   let finalFontSize = fontSize;
   if (element.width > 0 && maxTextWidth > 0) {
     const fitMinSize = textData.minFontSize ?? FONT_SIZE_MIN;
-    finalFontSize = fitText(renderText, maxTextWidth, finalFontSize, StandardFontsHelvetica, fitMinSize);
+    finalFontSize = await fitText(doc, renderText, maxTextWidth, finalFontSize, font, fitMinSize);
   }
 
   const lineHeight = (textData.lineHeight || 1.2) * finalFontSize;
@@ -125,24 +118,24 @@ async function renderTextElement(
   // Calculate x position based on alignment
   let x = element.x;
   if (textData.textAlign === "center") {
-    const avgCharWidth = (font.font.widthOfTextAtSize("a", finalFontSize) + font.font.widthOfTextAtSize("W", finalFontSize)) / 2;
+    const avgCharWidth = (font.widthOfTextAtSize("a", finalFontSize) + font.widthOfTextAtSize("W", finalFontSize)) / 2;
     const textWidth = avgCharWidth * renderText.length;
     x = element.x + (element.width - textWidth) / 2;
   } else if (textData.textAlign === "right") {
-    const avgCharWidth = (font.font.widthOfTextAtSize("a", finalFontSize) + font.font.widthOfTextAtSize("W", finalFontSize)) / 2;
+    const avgCharWidth = (font.widthOfTextAtSize("a", finalFontSize) + font.widthOfTextAtSize("W", finalFontSize)) / 2;
     const textWidth = avgCharWidth * renderText.length;
     x = element.x + element.width - textWidth;
   }
 
-  // Draw text with color using setTextColor
+  // Draw text
   page.setFontSize(finalFontSize * opacity);
-  page.setTextColor(color);
-  
+  page.setFontColor(color);
+  page.setFont(font);
+
   if (letterSpacing !== 0) {
-    // Manual letter spacing
     const chars = renderText.split("");
     let currentX = x;
-    const charWidth = font.font.widthOfTextAtSize("a", finalFontSize) + letterSpacing;
+    const charWidth = font.widthOfTextAtSize("a", finalFontSize) + letterSpacing;
 
     for (const char of chars) {
       page.drawText(char, {
@@ -164,25 +157,20 @@ async function renderImageElement(page: any, element: TemplateElement, data: Ele
   const imageData = data as ElementData & {
     type: "IMAGE";
     src: string;
-    assetId?: string;
     fit: "contain" | "cover" | "fill" | "none";
   };
 
   if (!imageData.src) return;
 
-  // For embedded assets, we'd need to fetch and embed
-  // For now, handle base64 data URIs
   if (imageData.src.startsWith("data:image")) {
     const matches = imageData.src.match(/^data:([^;]+);base64,(.+)$/);
     if (matches) {
-      const mimeType = matches[1];
       const base64 = matches[2];
       const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
       try {
         const pdfDoc = await PDFDocument.create();
         const image = await pdfDoc.embedPng(bytes);
-        // Calculate scaling to fit within element bounds
         const imgWidth = image.width;
         const imgHeight = image.height;
 
@@ -195,14 +183,12 @@ async function renderImageElement(page: any, element: TemplateElement, data: Ele
           const scale = Math.min(element.width / imgWidth, element.height / imgHeight);
           drawWidth = imgWidth * scale;
           drawHeight = imgHeight * scale;
-          // Center within element
           drawX = element.x + (element.width - drawWidth) / 2;
           drawY = element.y + (element.height - drawHeight) / 2;
         } else if (imageData.fit === "cover") {
           const scale = Math.max(element.width / imgWidth, element.height / imgHeight);
           drawWidth = imgWidth * scale;
           drawHeight = imgHeight * scale;
-          // Center crop
           drawX = element.x + (element.width - drawWidth) / 2;
           drawY = element.y + (element.height - drawHeight) / 2;
         }
@@ -225,7 +211,7 @@ async function renderImageElement(page: any, element: TemplateElement, data: Ele
 async function renderShapeElement(page: any, element: TemplateElement, data: ElementData) {
   const shapeData = data as ElementData & {
     type: "SHAPE";
-    shapeType: "rectangle" | "circle" | "triangle" | "star" | "hexagon";
+    shapeType: "rectangle" | "circle";
     fillColor: string;
     fillOpacity: number;
     strokeColor: string;
@@ -272,16 +258,6 @@ async function renderShapeElement(page: any, element: TemplateElement, data: Ele
         opacity: shapeData.fillOpacity ?? 1,
       });
     }
-    if (strokeWidth > 0 && shapeData.strokeColor && shapeData.strokeColor !== "transparent") {
-      page.drawEllipse({
-        x: centerX - radius,
-        y: centerY - radius,
-        width: radius * 2,
-        height: radius * 2,
-        borderColor: strokeColor,
-        borderWidth: strokeWidth,
-      });
-    }
   }
 }
 
@@ -308,34 +284,18 @@ async function renderQRElement(
   page: any,
   element: TemplateElement,
   data: ElementData,
-  qrDataUrl: string | undefined,
-  _certNumber: string
+  qrDataUrl: string | undefined
 ) {
-  const qrData = data as ElementData & {
-    type: "QR_CODE";
-    verificationUrl?: string;
-    size: number;
-    backgroundColor: string;
-    foregroundColor: string;
-  };
+  const size = (data as ElementData & { size: number }).size || QR_SIZE;
 
-  // We'll render QR as an image placeholder - in production, this would be a real QR
-  // For now, just draw a placeholder square
-  const bgColor = hexToRgb(qrData.backgroundColor || "#ffffff");
-  const fgColor = hexToRgb(qrData.foregroundColor || "#000000");
-
-  const size = qrData.size || QR_SIZE;
-  const centerX = element.x + size / 2;
-  const centerY = element.y + size / 2;
-
-  // QR placeholder
+  // Draw QR placeholder
   page.drawRectangle({
     x: element.x,
     y: element.y,
     width: size,
     height: size,
-    color: bgColor,
-    borderColor: fgColor,
+    color: hexToRgb((data as ElementData & { backgroundColor: string }).backgroundColor || "#ffffff"),
+    borderColor: hexToRgb((data as ElementData & { foregroundColor: string }).foregroundColor || "#000000"),
     borderWidth: 1,
   });
 
@@ -360,23 +320,12 @@ async function renderQRElement(
   }
 }
 
-// Generic image embedding helper
-async function pdfLibImage(bytes: Uint8Array, mimeType: string) {
-  const doc = await PDFDocument.create();
-  // PNG support only for now
-  if (mimeType === "image/png") {
-    return await doc.embedPng(bytes);
-  }
-  throw new Error(`Unsupported image type: ${mimeType}`);
-}
-
 // Render a single certificate to PDF
 export async function renderCertificate(
   templateVersion: TemplateVersion,
   certificate: Certificate,
   recipient: Recipient,
-  dynamicValues: Record<string, string>,
-  uploadBaseUrl: string = ""
+  dynamicValues: Record<string, string>
 ): Promise<RenderedCertificate> {
   // Create PDF document
   const pdfDoc = await PDFDocument.create();
@@ -393,10 +342,8 @@ export async function renderCertificate(
     });
   }
 
-  // Parse elements - use content field instead of data
+  // Parse elements
   const elements: TemplateElement[] = JSON.parse(templateVersion.elements);
-
-  // Sort by z-index
   elements.sort((a, b) => a.zIndex - b.zIndex);
 
   // Dynamic values for rendering
@@ -415,13 +362,12 @@ export async function renderCertificate(
 
   // Render each element
   for (const element of elements) {
-    // Parse element data from content field
     const data: ElementData = element.content ? JSON.parse(element.content) : {};
 
     try {
       switch ((element.type || '').toUpperCase()) {
         case "TEXT":
-          await renderTextElement(page, element, data);
+          await renderTextElement(page, element, data, pdfDoc);
           break;
         case "IMAGE":
           await renderImageElement(page, element, data);
@@ -433,11 +379,10 @@ export async function renderCertificate(
           await renderLineElement(page, element, data);
           break;
         case "QR_CODE":
-          await renderQRElement(page, element, data, undefined, certificate.certificateNumber);
+          await renderQRElement(page, element, data, undefined);
           break;
         case "SIGNATURE":
         case "SEAL":
-          // These would require image assets
           break;
       }
     } catch (e) {
@@ -445,13 +390,12 @@ export async function renderCertificate(
     }
   }
 
-  // Generate QR code for the certificate (landscape only)
+  // Generate QR code for the certificate
   let qrDataUrl: string | undefined;
   if (templateVersion.orientation === "landscape") {
     try {
       const verifyUrl = `${process.env.VERIFICATION_BASE_URL || "http://localhost:3000"}/verify/${certificate.certificateNumber}`;
       const qrBuffer = await generateQRCode(verifyUrl, 256);
-      // Convert to base64 data URL
       const bytes = new Uint8Array(qrBuffer);
       let binary = '';
       for (let i = 0; i < bytes.length; i++) {
@@ -474,31 +418,41 @@ export async function renderCertificate(
   };
 }
 
-// Bulk rendering without full database access
+// Bulk rendering for performance
 export async function renderCertificateToBuffer(
   templateVersion: TemplateVersion,
   certificateNumber: string,
   recipientName: string,
   dynamicValues: Record<string, string> = {}
 ): Promise<Uint8Array> {
-  // Simplified version for bulk rendering
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([templateVersion.width, templateVersion.height]);
 
-  // Render each element
+  if (templateVersion.backgroundColor) {
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: templateVersion.width,
+      height: templateVersion.height,
+      color: hexToRgb(templateVersion.backgroundColor),
+    });
+  }
+
   const elements: TemplateElement[] = JSON.parse(templateVersion.elements);
   elements.sort((a, b) => a.zIndex - b.zIndex);
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
   for (const element of elements) {
     const data: ElementData = element.content ? JSON.parse(element.content) : {};
     try {
       if (element.type === "text" && data.text) {
+        page.setFontSize(data.fontSize || 12);
+        page.setFont(font);
+        page.setFontColor(hexToRgb(data.color || "#000000"));
         page.drawText(data.text, {
           x: element.x,
           y: page.getHeight() - element.y - (data.fontSize || 12),
-          size: data.fontSize || 12,
-          font: helveticaFont,
-          color: data.color ? hexToRgb(data.color) : rgb(0, 0, 0),
         });
       }
     } catch (e) {

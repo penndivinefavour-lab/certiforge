@@ -1,6 +1,6 @@
 // Certificate operations (self-contained)
-import { prisma } from "./db";
-import { generateVerificationToken } from "./auth";
+import { query, queryOne, execute } from './db';
+import { generateVerificationToken } from './auth';
 
 export interface CertificateIdResult {
   certificateNumber: string;
@@ -16,27 +16,26 @@ export async function claimCertificateNumber(
   projectId: string,
   year: number
 ): Promise<CertificateIdResult> {
-  let sequence = await prisma.certificateSequence.findFirst({
-    where: { projectId, year },
-  });
+  let sequence = await queryOne(
+    'SELECT * FROM certificate_sequences WHERE projectId = $1 AND year = $2 LIMIT 1',
+    [projectId, year]
+  );
 
   if (!sequence) {
-    sequence = await prisma.certificateSequence.create({
-      data: {
-        projectId,
-        year,
-        nextNumber: 1,
-      },
-    });
+    const result = await query(
+      'INSERT INTO certificate_sequences (projectId, year, nextNumber, createdAt) VALUES ($1, $2, $3, NOW()) RETURNING *',
+      [projectId, year, 1]
+    );
+    sequence = result[0];
   }
 
   const certNumber = formatCertificateNumber(sequence.year, sequence.nextNumber);
   const nextSeq = sequence.nextNumber + 1;
 
-  await prisma.certificateSequence.update({
-    where: { id: sequence.id },
-    data: { nextNumber: nextSeq },
-  });
+  await execute(
+    'UPDATE certificate_sequences SET nextNumber = $1 WHERE id = $2',
+    [nextSeq, sequence.id]
+  );
 
   return {
     certificateNumber: certNumber,
@@ -59,9 +58,10 @@ export function parseCertificateNumber(certNum: string): { year: number; sequenc
 }
 
 export async function getCertificateSequence(projectId: string, year: number): Promise<number> {
-  const sequence = await prisma.certificateSequence.findFirst({
-    where: { projectId, year },
-  });
+  const sequence = await queryOne(
+    'SELECT * FROM certificate_sequences WHERE projectId = $1 AND year = $2 LIMIT 1',
+    [projectId, year]
+  );
   return sequence?.nextNumber ?? 1;
 }
 
@@ -74,37 +74,33 @@ export async function revokeCertificate(
   revokedBy: string,
   reason: string
 ): Promise<void> {
-  if (!prisma) throw new Error("Prisma client not initialized");
-  
-  await prisma.$transaction(async (tx) => {
-    const cert = await tx.certificate.findUnique({
-      where: { id: certificateId },
-      include: { project: true },
-    });
-    if (!cert) {
-      throw new Error("Certificate not found");
-    }
-    if (cert.status === "REVOKED") {
-      throw new Error("Certificate is already revoked");
-    }
-    await tx.certificate.update({
-      where: { id: certificateId },
-      data: {
-        status: "REVOKED",
-        revocationReason: reason,
-        revokedAt: new Date(),
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        organizationId: cert.project.organizationId,
-        projectId: cert.projectId,
-        actorId: revokedBy,
-        action: "CERTIFICATE_REVOKED",
-        resourceType: "Certificate",
-        resourceId: certificateId,
-        details: JSON.stringify({ reason }),
-      },
-    });
-  });
+  const cert = await queryOne(
+    'SELECT * FROM certificates WHERE id = $1',
+    [certificateId]
+  );
+
+  if (!cert) {
+    throw new Error("Certificate not found");
+  }
+  if (cert.status === "REVOKED") {
+    throw new Error("Certificate is already revoked");
+  }
+
+  await execute(
+    'UPDATE certificates SET status = $1, revocationReason = $2, revokedAt = NOW() WHERE id = $3',
+    ['REVOKED', reason, certificateId]
+  );
+
+  await execute(
+    'INSERT INTO audit_logs (userId, organizationId, action, resourceType, resourceId, details, createdAt) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
+    [revokedBy, cert.organizationId, 'CERTIFICATE_REVOKED', 'certificate', certificateId, JSON.stringify({ reason })]
+  );
+}
+
+export async function getCertificate(id: string) {
+  return await queryOne('SELECT * FROM certificates WHERE id = $1', [id]);
+}
+
+export async function findCertificate(verificationToken: string) {
+  return await queryOne('SELECT * FROM certificates WHERE verificationToken = $1', [verificationToken]);
 }

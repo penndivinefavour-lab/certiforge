@@ -6,7 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 
 // Dynamically import Fabric.js to avoid SSR issues
-const fabric = dynamic(() => import("fabric").then((mod) => ({ default: mod })), {
+const fabric = dynamic(async () => {
+  const mod = await import("fabric");
+  return mod as any;
+}, {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
 });
@@ -71,14 +74,14 @@ export default function EditorPage() {
     if (!canvasRef.current) return;
 
     const initCanvas = async () => {
-      const mod = await fabric;
-      const fabricModule = mod.default || mod;
-      const { Canvas } = fabricModule;
+      const fabricModule = await fabric;
+      const mod: any = fabricModule.default || fabricModule;
+      const { Canvas } = mod;
 
-      const canvas = new Canvas(canvasRef.current, {
-        width: canvas.width * zoom,
-        height: canvas.height * zoom,
-        backgroundColor: canvas.backgroundColor,
+      const canvasInstance = new Canvas(canvasRef.current, {
+        width: 1122 * zoom,
+        height: 794 * zoom,
+        backgroundColor: '#ffffff',
         preserveObjectStacking: true,
       });
 
@@ -88,7 +91,7 @@ export default function EditorPage() {
       await loadTemplate();
 
       // Event listeners
-      canvas.on("selection:created", (e: any) => {
+      (canvasInstance as any).on("selection:created", (e: any) => {
         const obj = e.selected?.[0];
         if (obj) {
           const el: TemplateElement = {
@@ -109,12 +112,12 @@ export default function EditorPage() {
         }
       });
 
-      canvas.on("selection:cleared", () => {
+      (canvasInstance as any).on("selection:cleared", () => {
         setSelectedElement(null);
         setShowProperties(false);
       });
 
-      canvas.on("object:modified", (e: any) => {
+      (canvasInstance as any).on("object:modified", (e: any) => {
         const obj = e.target;
         setElements((prev) =>
           prev.map((el) =>
@@ -241,7 +244,7 @@ export default function EditorPage() {
           fontSize: 12,
           fill: "#666666",
         });
-        canvasRef.current.add(qrText);
+        (mod as any).canvas?.add(qrText);
         break;
     }
 
@@ -579,7 +582,7 @@ export default function EditorPage() {
                       <input
                         type="number"
                         className="form-input"
-                        value={selectedElement.style?.fontSize || 24}
+                        value={String(selectedElement.style?.fontSize || 24)}
                         onChange={(e) => updateSelected({ style: { ...selectedElement.style, fontSize: Number(e.target.value) } })}
                       />
                     </div>
@@ -589,13 +592,13 @@ export default function EditorPage() {
                         <input
                           type="color"
                           className="w-10 h-8 rounded cursor-pointer"
-                          value={selectedElement.style?.fill || "#000000"}
+                          value={String(selectedElement.style?.fill || '#000000')}
                           onChange={(e) => updateSelected({ style: { ...selectedElement.style, fill: e.target.value } })}
                         />
                         <input
                           type="text"
                           className="form-input flex-1"
-                          value={selectedElement.style?.fill || "#000000"}
+                          value={String(selectedElement.style?.fill || '#000000')}
                           onChange={(e) => updateSelected({ style: { ...selectedElement.style, fill: e.target.value } })}
                         />
                       </div>

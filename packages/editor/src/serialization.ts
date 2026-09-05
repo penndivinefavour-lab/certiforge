@@ -23,7 +23,7 @@ export function serializeEditorState(state: EditorState): string {
       content: el.content,
       style: el.style,
       dynamic: el.dynamic,
-      z: el.z
+      zIndex: el.zIndex
     }))
   };
   return JSON.stringify(data);
@@ -47,7 +47,7 @@ export function deserializeEditorState(json: string): EditorState | null {
         content: el.content,
         style: el.style || {},
         dynamic: el.dynamic,
-        z: el.z || 0
+        zIndex: el.zIndex || 0
       })),
       zoom: data.zoom || 1,
       selectedElementId: data.selectedElementId || null
@@ -57,95 +57,14 @@ export function deserializeEditorState(json: string): EditorState | null {
   }
 }
 
-// Smart text fitting
-export function fitText(
-  text: string,
-  maxWidth: number,
-  fontSize: number,
-  fontFamily: string,
-  fontWeight: string = 'normal',
-  fontFamilyMap: Record<string, string> = {}
-): number {
-  // Simplified text fitting - in production, use canvas measureText
-  const maxFontSize = fontSize;
-  const minFontSize = 8;
-  
-  if (text.length === 0) return maxFontSize;
-  
-  // Approximate character width (in pixels)
-  const avgCharWidth = fontSize * 0.6;
-  const charsPerLine = Math.floor(maxWidth / avgCharWidth);
-  
-  if (text.length <= charsPerLine) {
-    return maxFontSize;
-  }
-  
-  // Reduce font size proportionally
-  let fittedSize = maxFontSize;
-  while (fittedSize > minFontSize) {
-    const newAvgWidth = fittedSize * 0.6;
-    const newCharsPerLine = Math.floor(maxWidth / newAvgWidth);
-    if (text.length <= newCharsPerLine) {
-      break;
-    }
-    fittedSize -= 1;
-  }
-  
-  return fittedSize;
-}
-
-// Validate element dimensions
-export function validateElement(element: TemplateElement, canvas: CanvasDimensions): boolean {
-  return (
-    element.x >= 0 &&
-    element.y >= 0 &&
-    element.x + element.width <= canvas.width &&
-    element.y + element.height <= canvas.height &&
-    element.width > 0 &&
-    element.height > 0
-  );
-}
-
-// Convert fabric.js data to Prisma format
-export function fabricDataToPrisma(canvasData: any): EditorState {
+export function stateToFabricState(state: EditorState): any {
   return {
     canvas: {
-      width: canvasData.width,
-      height: canvasData.height,
-      unit: canvasData.unit || 'mm'
+      width: state.canvas.width,
+      height: state.canvas.height,
+      unit: state.canvas.unit
     },
-    elements: canvasData.objects.map((obj: any) => ({
-      id: obj.id,
-      type: obj.type,
-      x: obj.left,
-      y: obj.top,
-      width: obj.width,
-      height: obj.height,
-      rotation: obj.angle || 0,
-      content: obj.text || obj.fill || obj.stroke,
-      style: {
-        fontFamily: obj.fontFamily,
-        fontSize: obj.fontSize,
-        fontWeight: obj.fontWeight,
-        color: obj.fill,
-        textAlign: obj.textAlign,
-        opacity: obj.opacity
-      },
-      dynamic: obj.dynamic,
-      z: obj.index || 0
-    })),
-    zoom: canvasData.zoom || 1,
-    selectedElementId: canvasData.selectedElementId || null
-  };
-}
-
-// Convert Prisma format to fabric.js data
-export function prismaDataToFabric(state: EditorState): any {
-  return {
-    width: state.canvas.width,
-    height: state.canvas.height,
-    objects: state.elements.map(el => ({
-      id: el.id,
+    elements: state.elements.map(el => ({
       type: el.type,
       left: el.x,
       top: el.y,
@@ -153,14 +72,27 @@ export function prismaDataToFabric(state: EditorState): any {
       height: el.height,
       angle: el.rotation,
       text: el.content,
-      fill: el.style.color,
-      fontFamily: el.style.fontFamily,
-      fontSize: el.style.fontSize,
-      fontWeight: el.style.fontWeight,
-      textAlign: el.style.textAlign,
-      opacity: el.style.opacity,
+      fill: el.style?.color,
+      fontFamily: el.style?.fontFamily,
+      fontSize: el.style?.fontSize,
+      fontWeight: el.style?.fontWeight,
+      textAlign: el.style?.textAlign,
+      opacity: el.style?.opacity,
       dynamic: el.dynamic,
-      index: el.z
+      index: el.zIndex
     }))
   };
+}
+
+export function validateElement(element: TemplateElement, canvas: CanvasDimensions): boolean {
+  // Basic validation: element should be within canvas bounds
+  if (element.x < 0 || element.y < 0) return false;
+  if (element.x + element.width > canvas.width) return false;
+  if (element.y + element.height > canvas.height) return false;
+  
+  // Validate type-specific properties
+  if (element.type === 'text' && !element.content) return false;
+  if (element.type === 'image' && !element.content) return false;
+  
+  return true;
 }

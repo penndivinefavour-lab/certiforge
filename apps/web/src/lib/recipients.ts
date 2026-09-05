@@ -1,6 +1,6 @@
 // Recipients operations (self-contained)
 import { prisma } from "./db";
-import type { Recipient, RecipientImport, RecipientImportRow, RecipientMapping } from "../../packages/types/src/index.ts";
+import type { Recipient, RecipientImport, RecipientImportRow, RecipientMapping } from '@certiforge/types';
 import { z } from "zod";
 
 export interface ParsedRow {

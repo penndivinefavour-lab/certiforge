@@ -351,10 +351,12 @@ const db = {
       return result[0];
     },
     bulkCreate: async (data: any[]) => {
-      const results = [];
+      const results: any[] = [];
       for (const recipient of data) {
         const result = await this.create(recipient);
-        results.push(result);
+        if (result) {
+          results.push(result);
+        }
       }
       return results;
     }
@@ -443,6 +445,19 @@ const db = {
       const sql = `SELECT * FROM generation_jobs WHERE id = $1 LIMIT 1`;
       return await queryOne(sql, [where.id]);
     },
+    findFirst: async (where?: any) => {
+      let sql = 'SELECT * FROM generation_jobs';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.projectId) { conditions.push(`projectId = $${conditions.length + 1}`); params.push(where.projectId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      sql += ' LIMIT 1';
+      return await queryOne(sql, params);
+    },
     findMany: async (where?: any) => {
       let sql = 'SELECT * FROM generation_jobs';
       const params: any[] = [];
@@ -457,14 +472,14 @@ const db = {
     },
     create: async (data: any) => {
       const sql = `INSERT INTO generation_jobs (projectId, status, total, completed, failed, createdAt) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`;
-      const result = await query(sql, [data.projectId, data.status, data.total, data.completed, data.failed]);
+      const result = await query(sql, [data.projectId, data.status, data.total, data.completed || 0, data.failed || 0]);
       return result[0];
     },
     update: async (where: any, data: any) => {
       const setClauses: string[] = [];
       const params: any[] = [];
       let paramIndex = 1;
-      
+
       const allowedFields = ['status', 'total', 'completed', 'failed', 'completedAt'];
       for (const key of allowedFields) {
         if (data[key] !== undefined) {
@@ -472,33 +487,176 @@ const db = {
           params.push(data[key]);
         }
       }
-      
+
       const whereClauses: string[] = [];
       if (where.id) { whereClauses.push(`id = $${paramIndex++}`); params.push(where.id); }
-      
+
       const sql = `UPDATE generation_jobs SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
       const result = await query(sql, params);
       return result[0];
     }
   },
-  
-  certificateSequence: {
+
+  generationJobItem: {
+    findMany: async (where?: any) => {
+      let sql = 'SELECT * FROM generation_job_items';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.generationJobId) { conditions.push(`generationJobId = $${conditions.length + 1}`); params.push(where.generationJobId); }
+        if (where.certificateId) { conditions.push(`certificateId = $${conditions.length + 1}`); params.push(where.certificateId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      return await query(sql, params);
+    },
     findUnique: async (where: any) => {
-      const sql = `SELECT * FROM certificate_sequences WHERE projectId = $1 LIMIT 1`;
-      return await queryOne(sql, [where.projectId]);
+      const sql = `SELECT * FROM generation_job_items WHERE id = $1 LIMIT 1`;
+      return await queryOne(sql, [where.id]);
     },
     create: async (data: any) => {
-      const sql = `INSERT INTO certificate_sequences (projectId, nextNumber, createdAt) VALUES ($1, $2, NOW()) RETURNING *`;
-      const result = await query(sql, [data.projectId, data.nextNumber]);
+      const sql = `INSERT INTO generation_job_items (generationJobId, certificateId, status, attempts, createdAt) VALUES ($1, $2, $3, $4, NOW()) RETURNING *`;
+      const result = await query(sql, [
+        data.generationJobId, data.certificateId, data.status, data.attempts || 1
+      ]);
       return result[0];
     },
     update: async (where: any, data: any) => {
-      const sql = `UPDATE certificate_sequences SET nextNumber = $1 WHERE projectId = $2 RETURNING *`;
-      const result = await query(sql, [data.nextNumber, where.projectId]);
+      const setClauses: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      const allowedFields = ['status', 'error', 'attempts'];
+      for (const key of allowedFields) {
+        if (data[key] !== undefined) {
+          setClauses.push(`${key} = $${paramIndex++}`);
+          params.push(data[key]);
+        }
+      }
+
+      const whereClauses: string[] = [];
+      if (where.id) { whereClauses.push(`id = $${paramIndex++}`); params.push(where.id); }
+
+      const sql = `UPDATE generation_job_items SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
+      const result = await query(sql, params);
       return result[0];
     }
   },
-  
+
+  certificateSequence: {
+    findUnique: async (where: any) => {
+      const sql = `SELECT * FROM certificate_sequences WHERE id = $1 LIMIT 1`;
+      return await queryOne(sql, [where.id]);
+    },
+    findFirst: async (where?: any) => {
+      let sql = 'SELECT * FROM certificate_sequences';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.projectId) { conditions.push(`projectId = $${conditions.length + 1}`); params.push(where.projectId); }
+        if (where.year) { conditions.push(`year = $${conditions.length + 1}`); params.push(where.year); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      sql += ' LIMIT 1';
+      return await queryOne(sql, params);
+    },
+    create: async (data: any) => {
+      const sql = `INSERT INTO certificate_sequences (projectId, year, nextNumber, createdAt) VALUES ($1, $2, $3, NOW()) RETURNING *`;
+      const result = await query(sql, [data.projectId, data.year, data.nextNumber]);
+      return result[0];
+    },
+    update: async (where: any, data: any) => {
+      const setClauses: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (data.nextNumber !== undefined) {
+        setClauses.push(`nextNumber = $${paramIndex++}`);
+        params.push(data.nextNumber);
+      }
+
+      const whereClauses: string[] = [];
+      if (where.id) { whereClauses.push(`id = $${paramIndex++}`); params.push(where.id); }
+
+      const sql = `UPDATE certificate_sequences SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
+      const result = await query(sql, params);
+      return result[0];
+    }
+  },
+
+  recipientImport: {
+    findUnique: async (where: any) => {
+      const sql = `SELECT * FROM recipient_imports WHERE id = $1 LIMIT 1`;
+      return await queryOne(sql, [where.id]);
+    },
+    findMany: async (where?: any) => {
+      let sql = 'SELECT * FROM recipient_imports';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.projectId) { conditions.push(`projectId = $${conditions.length + 1}`); params.push(where.projectId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      return await query(sql, params);
+    },
+    create: async (data: any) => {
+      const sql = `INSERT INTO recipient_imports (projectId, userId, fileName, fileType, totalRows, validRows, invalidRows, status, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`;
+      const result = await query(sql, [
+        data.projectId, data.userId, data.fileName, data.fileType,
+        data.totalRows, data.validRows, data.invalidRows, data.status || 'COMPLETED'
+      ]);
+      return result[0];
+    },
+    update: async (where: any, data: any) => {
+      const setClauses: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      const allowedFields = ['status', 'totalRows', 'validRows', 'invalidRows'];
+      for (const key of allowedFields) {
+        if (data[key] !== undefined) {
+          setClauses.push(`${key} = $${paramIndex++}`);
+          params.push(data[key]);
+        }
+      }
+
+      const whereClauses: string[] = [];
+      if (where.id) { whereClauses.push(`id = $${paramIndex++}`); params.push(where.id); }
+
+      const sql = `UPDATE recipient_imports SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
+      const result = await query(sql, params);
+      return result[0];
+    }
+  },
+
+  recipientImportRow: {
+    findMany: async (where?: any) => {
+      let sql = 'SELECT * FROM recipient_import_rows';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.importId) { conditions.push(`importId = $${conditions.length + 1}`); params.push(where.importId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      return await query(sql, params);
+    },
+    create: async (data: any) => {
+      const sql = `INSERT INTO recipient_import_rows (importId, rowNumber, rawData, status, errors, createdAt) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`;
+      const result = await query(sql, [
+        data.importId, data.rowNumber, data.rawData, data.status,
+        data.errors ? JSON.stringify(data.errors) : null
+      ]);
+      return result[0];
+    }
+  },
+
   auditLog: {
     findMany: async (where?: any) => {
       let sql = 'SELECT * FROM audit_logs';

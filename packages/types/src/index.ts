@@ -54,6 +54,12 @@ export interface Project {
   updatedAt: Date;
 }
 
+export interface CanvasDimensions {
+  width: number;
+  height: number;
+  unit: 'pt' | 'in' | 'mm' | 'px';
+}
+
 export interface Template {
   id: string;
   projectId: string;

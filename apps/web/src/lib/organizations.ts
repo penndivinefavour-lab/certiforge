@@ -1,6 +1,6 @@
 // Organization and project operations (self-contained)
 import { z } from "zod";
-import { prisma } from "./db";
+import { query, queryOne, execute } from "./db";
 import { requirePermission } from "./auth";
 
 export type Organization = any;
@@ -19,35 +19,30 @@ export async function createOrganization(
   userId: string,
   data: CreateOrganizationInput
 ): Promise<any> {
-  const org = await prisma.organization.create({
-    data: {
-      name: data.name,
-      slug: data.slug,
-      primaryColor: data.primaryColor || "#1a1a2e",
-      logoUrl: data.logoUrl || null,
-    },
-  });
+  const result = await query(
+    'INSERT INTO organizations (name, slug, primaryColor, logoUrl, createdAt, updatedAt) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+    [data.name, data.slug, data.primaryColor || '#1a1a2e', data.logoUrl || null]
+  );
+  const org = result[0];
 
-  await prisma.organizationMember.create({
-    data: {
-      organizationId: org.id,
-      userId,
-      role: "OWNER",
-    },
-  });
+  await query(
+    'INSERT INTO organization_members (organizationId, userId, role, createdAt) VALUES ($1, $2, $3, NOW())',
+    [org.id, userId, 'OWNER']
+  );
 
   return org;
 }
 
 export async function getOrganization(id: string): Promise<any> {
-  return prisma.organization.findUnique({ where: { id } });
+  return await queryOne('SELECT * FROM organizations WHERE id = $1', [id]);
 }
 
 export async function listOrganizations(userId: string) {
-  return prisma.organizationMember.findMany({
-    where: { userId },
-    include: { organization: true },
-  });
+  const members = await query(
+    'SELECT om.*, o.* FROM organization_members om JOIN organizations o ON om.organizationId = o.id WHERE om.userId = $1',
+    [userId]
+  );
+  return members;
 }
 
 const CreateProjectSchema = z.object({
@@ -65,30 +60,32 @@ export async function createProject(
 ): Promise<any> {
   await requirePermission(userId, input.organizationId, "EDITOR");
 
-  const existing = await prisma.project.findFirst({
-    where: { organizationId: input.organizationId, slug: input.slug },
-  });
+  const existing = await queryOne(
+    'SELECT id FROM projects WHERE organizationId = $1 AND slug = $2 LIMIT 1',
+    [input.organizationId, input.slug]
+  );
   if (existing) {
     throw new Error("Project slug already in use");
   }
 
-  return prisma.project.create({
-    data: {
-      organizationId: input.organizationId,
-      name: input.name,
-      slug: input.slug,
-      description: input.description || null,
-    },
-  });
+  const result = await query(
+    'INSERT INTO projects (name, slug, description, organizationId, createdAt, updatedAt) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+    [input.name, input.slug, input.description || null, input.organizationId]
+  );
+  return result[0];
 }
 
 export async function getProject(id: string): Promise<any> {
-  return prisma.project.findUnique({ where: { id } });
+  return await queryOne('SELECT * FROM projects WHERE id = $1', [id]);
 }
 
 export async function listProjects(organizationId: string) {
-  return prisma.project.findMany({
-    where: { organizationId },
-    orderBy: { createdAt: "desc" },
-  });
+  return await query(
+    'SELECT * FROM projects WHERE organizationId = $1 ORDER BY createdAt DESC',
+    [organizationId]
+  );
+}
+
+export async function findProject(slug: string): Promise<any> {
+  return await queryOne('SELECT * FROM projects WHERE slug = $1', [slug]);
 }
