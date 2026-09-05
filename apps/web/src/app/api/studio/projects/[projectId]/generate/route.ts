@@ -1,47 +1,46 @@
 // Open Studio Generation API (No Auth Required)
-import { NextRequest, NextResponse } from 'next/server';
-import { openStudioDB, getCurrentWorkspace } from '../../../../packages/open-studio/src/db';
-import { renderCertificate } from '../../../../packages/certificate-engine/src/render';
-import { generateQRCode } from '../../../../packages/qr/src/generator';
-import { generateCertificateId } from '../../../../packages/certificate-engine/src/ids';
-import { generateVerificationToken } from '../../../../apps/web/src/lib/auth';
+import { NextResponse } from 'next/server';
+import { openStudioDB, getCurrentWorkspace } from 'open-studio';
+import { renderCertificate } from 'certificate-engine';
+import { generateQRCode } from 'qr';
+import { generateCertificateId, generateVerificationToken } from 'certificate-engine';
 
 export async function POST(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const { projectId } = await params;
     const body = await request.json();
-    
+
     const { templateId, recipients } = body;
-    
+
     if (!templateId || !recipients || !Array.isArray(recipients)) {
       return NextResponse.json(
         { error: 'Template ID and recipients array are required' },
         { status: 400 }
       );
     }
-    
+
     if (recipients.length === 0) {
       return NextResponse.json(
         { error: 'No recipients provided' },
         { status: 400 }
       );
     }
-    
+
     // Get template
     const template = await openStudioDB.getTemplate(templateId);
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
-    
+
     // Get project to verify ownership
     const project = await openStudioDB.getProject(projectId);
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
-    
+
     // Create generation job
     const jobId = generateCertificateId();
     await openStudioDB.createGenerationJob({
@@ -51,20 +50,20 @@ export async function POST(
       total: recipients.length,
       createdAt: Date.now(),
     });
-    
+
     // Generate certificates
     const certificates = [];
     const errors = [];
-    
+
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i];
-      
+
       try {
         // Generate certificate ID
         const certificateId = generateCertificateId();
         const certificateNumber = `CF-${certificateId.slice(0, 4)}-${certificateId.slice(4, 8)}-${certificateId.slice(8, 12)}`;
         const verificationToken = generateVerificationToken();
-        
+
         // Prepare dynamic values
         const dynamicValues = {
           recipient_name: recipient.name,
@@ -77,7 +76,7 @@ export async function POST(
           grade: recipient.metadata?.grade || '',
           ...recipient.metadata,
         };
-        
+
         // Render PDF
         const rendered = await renderCertificate(
           {
@@ -110,13 +109,13 @@ export async function POST(
           } as any,
           dynamicValues
         );
-        
+
         // Generate QR code
         const qrDataUrl = await generateQRCode(
-          `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify/${certificateNumber}`,
+          `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/studio/verify/${certificateNumber}`,
           256
         );
-        
+
         // Save certificate
         const certificate = await openStudioDB.createCertificate({
           projectId,
@@ -130,15 +129,15 @@ export async function POST(
           metadata: dynamicValues,
           issuedAt: Date.now(),
         });
-        
+
         certificates.push(certificate);
-        
+
       } catch (error) {
         console.error(`Failed to generate certificate for ${recipient.name}:`, error);
         errors.push({ recipientId: recipient.id, error: error instanceof Error ? error.message : 'Unknown error' });
       }
     }
-    
+
     // Update job status
     await openStudioDB.updateGenerationJob(jobId, {
       status: errors.length > 0 ? 'PARTIAL_FAILURE' : 'COMPLETED',
@@ -146,7 +145,7 @@ export async function POST(
       failed: errors.length,
       completedAt: Date.now(),
     });
-    
+
     return NextResponse.json({
       job: {
         id: jobId,
@@ -165,13 +164,13 @@ export async function POST(
 }
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const { projectId } = await params;
     const certificates = await openStudioDB.getCertificates(projectId);
-    
+
     return NextResponse.json({ certificates, count: certificates.length });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch certificates' }, { status: 500 });

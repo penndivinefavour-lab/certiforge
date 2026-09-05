@@ -19,7 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "open-studio": ["../../packages/open-studio/src/index.ts"],
+      "open-studio/*": ["../../packages/open-studio/src/*"],
+      "certificate-engine": ["../../packages/certificate-engine/src/index.ts"],
+      "certificate-engine/*": ["../../packages/certificate-engine/src/*"],
+      "qr": ["../../packages/qr/src/index.ts"],
+      "qr/*": ["../../packages/qr/src/*"]
     }
   },
   "include": [

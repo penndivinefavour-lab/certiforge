@@ -1,25 +1,26 @@
 // CertiForge Auth (self-contained with raw pg)
-const bcrypt = require('bcryptjs');
-const { queryOne, query, execute } = require('@/lib/db');
+import bcrypt from 'bcryptjs';
+import { queryOne, query, execute } from './db';
+import * as crypto from 'crypto';
 
 const SALT_ROUNDS = 12;
 
-async function hashPassword(password) {
+export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
 
-async function verifyPassword(password, hash) {
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
 
-async function createUser(input) {
+export async function createUser(input: { email: string; password: string; name: string }): Promise<{ id: string; email: string; name: string }> {
   const existing = await queryOne('SELECT id FROM users WHERE email = $1', [input.email.toLowerCase().trim()]);
   if (existing) {
     throw new Error('User with this email already exists');
   }
 
   const passwordHash = await hashPassword(input.password);
-  const userId = require('crypto').randomUUID();
+  const userId = crypto.randomUUID();
 
   await execute(
     'INSERT INTO users (id, email, name, password, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW())',
@@ -29,7 +30,7 @@ async function createUser(input) {
   return { id: userId, email: input.email.toLowerCase().trim(), name: input.name.trim() };
 }
 
-async function authenticateUser(email, password) {
+export async function authenticateUser(email: string, password: string): Promise<{ id: string; email: string; name: string } | null> {
   const user = await queryOne('SELECT id, email, name, password FROM users WHERE email = $1', [email.toLowerCase()]);
   if (!user) return null;
 
@@ -39,19 +40,19 @@ async function authenticateUser(email, password) {
   return { id: user.id, email: user.email, name: user.name };
 }
 
-async function createSession(userId, expiresInDays = 7) {
+export async function createSession(userId: string, expiresInDays: number = 7): Promise<string> {
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
-  const token = require('crypto').randomUUID() + '.' + Date.now().toString(36);
+  const token = crypto.randomUUID() + '.' + Date.now().toString(36);
 
   await execute(
     'INSERT INTO sessions (id, "userId", token, "expiresAt", "createdAt") VALUES ($1, $2, $3, $4, NOW())',
-    [require('crypto').randomUUID(), userId, token, expiresAt]
+    [crypto.randomUUID(), userId, token, expiresAt]
   );
 
   return token;
 }
 
-async function getSession(token) {
+export async function getSession(token: string): Promise<any | null> {
   if (!token) return null;
 
   const session = await queryOne(
@@ -66,11 +67,11 @@ async function getSession(token) {
   return session;
 }
 
-async function deleteSession(token) {
+export async function deleteSession(token: string): Promise<void> {
   await execute('DELETE FROM sessions WHERE token = $1', [token]).catch(() => {});
 }
 
-async function getUserFromSession(session) {
+export async function getUserFromSession(session: any): Promise<{ id: string; email: string; name: string; avatarUrl?: string } | null> {
   if (!session) return null;
   return {
     id: session.id,
@@ -80,18 +81,22 @@ async function getUserFromSession(session) {
   };
 }
 
-function generateVerificationToken() {
-  return require('crypto').randomUUID().replace(/-/g, '').slice(0, 32);
+export function generateVerificationToken(): string {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 32);
 }
 
-module.exports = {
-  hashPassword,
-  verifyPassword,
-  createUser,
-  authenticateUser,
-  createSession,
-  getSession,
-  deleteSession,
-  getUserFromSession,
-  generateVerificationToken,
-};
+export async function requirePermission(userId: string, organizationId: string, requiredRole: string): Promise<void> {
+  const member = await queryOne(
+    'SELECT role FROM memberships WHERE userId = $1 AND organizationId = $2',
+    [userId, organizationId]
+  );
+
+  if (!member) {
+    throw new Error('You do not have access to this organization');
+  }
+
+  const roleOrder = { 'OWNER': 4, 'ADMIN': 3, 'EDITOR': 2, 'VIEWER': 1 };
+  if ((roleOrder[member.role as keyof typeof roleOrder] || 0) < (roleOrder[requiredRole as keyof typeof roleOrder] || 0)) {
+    throw new Error('You do not have permission to perform this action');
+  }
+}

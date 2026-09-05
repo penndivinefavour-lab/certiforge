@@ -2,25 +2,21 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { fabric } from 'fabric';
+import * as fabric from 'fabric';
 import { motion } from 'framer-motion';
 
 export default function StudioEditorPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
-  
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
-  const [projectId, setProjectId] = useState<string>('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
 
   useEffect(() => {
-    // Get project ID from params
-    setProjectId(params.projectId as string);
-    
     // Initialize Fabric canvas
     if (canvasRef.current) {
       const fabricCanvas = new fabric.Canvas(canvasRef.current, {

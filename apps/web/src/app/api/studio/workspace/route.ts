@@ -1,13 +1,13 @@
-// Open Studio API Routes (No Authentication Required)
-import { NextRequest, NextResponse } from 'next/server';
-import { openStudioDB } from '../../../packages/open-studio/src/db';
+// Open Studio Workspace API
+import { NextResponse } from 'next/server';
+import { openStudioDB } from 'open-studio';
 
 // Workspace
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const workspace = await openStudioDB.getOrCreateWorkspace();
     const projects = await openStudioDB.getProjects(workspace.id);
-    
+
     return NextResponse.json({
       workspace,
       projects,

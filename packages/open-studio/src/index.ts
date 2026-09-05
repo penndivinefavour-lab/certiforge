@@ -1,3 +1,10 @@
 // Open Studio Package - Client-side certificate generation
-export * from './src/db';
-export * from './src/types';
+export { openStudioDB } from './db';
+export { getCurrentWorkspace } from './db';
+export type {
+  OpenStudioProject,
+  OpenStudioTemplate,
+  OpenStudioRecipient,
+  OpenStudioCertificate,
+  OpenStudioWorkspace,
+} from './types';

@@ -1,27 +1,27 @@
 // Open Studio Verify API (No Auth Required)
-import { NextRequest, NextResponse } from 'next/server';
-import { openStudioDB } from '../../../../packages/open-studio/src/db';
+import { NextResponse } from 'next/server';
+import { openStudioDB } from 'open-studio';
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ certificateNumber: string }> }
 ) {
   try {
     const { certificateNumber } = await params;
-    
+
     if (!certificateNumber) {
       return NextResponse.json({ error: 'Certificate number required' }, { status: 400 });
     }
-    
+
     const certificate = await openStudioDB.getCertificateByNumber(certificateNumber);
-    
+
     if (!certificate) {
       return NextResponse.json({ verified: false, error: 'Certificate not found' }, { status: 404 });
     }
-    
+
     // Get recipient and project details
     const recipient = await openStudioDB.getRecipient(certificate.recipientId);
-    
+
     return NextResponse.json({
       verified: true,
       certificate: {
