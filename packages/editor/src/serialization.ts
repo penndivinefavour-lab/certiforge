@@ -1,5 +1,5 @@
 // CertiForge Editor - Canvas serialization and deserialization
-import type { TemplateElement, CanvasDimensions } from '@/types';
+import type { TemplateElement, CanvasDimensions } from '@certiforge/types';
 
 export interface EditorState {
   canvas: CanvasDimensions;
@@ -133,7 +133,9 @@ export function fabricDataToPrisma(canvasData: any): EditorState {
       },
       dynamic: obj.dynamic,
       z: obj.index || 0
-    }))
+    })),
+    zoom: canvasData.zoom || 1,
+    selectedElementId: canvasData.selectedElementId || null
   };
 }
 

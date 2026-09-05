@@ -102,7 +102,7 @@ export const templateElementSchema = z.object({
   height: z.number(),
   rotation: z.number().optional(),
   content: z.string().optional(),
-  style: z.record(z.any()).optional(),
+  style: z.record(z.unknown()).optional(),
   dynamic: z.object({
     field: z.string(),
     fallback: z.string().optional()

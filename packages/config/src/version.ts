@@ -1,5 +1,6 @@
+// Config package - version computation (CommonJS for build-time use)
 const { hashElement } = require("folder-hash");
-const crypto = require("crypto");
+const nodeCrypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
@@ -78,7 +79,7 @@ async function computeVersion() {
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION || "dev",
     hasDatabase: prismaCanConnect(),
   };
-  parts.push(`env:${crypto.createHash("sha256").update(JSON.stringify(envFingerprint)).digest("hex").slice(0, 16)}`);
+  parts.push(`env:${nodeCrypto.createHash("sha256").update(JSON.stringify(envFingerprint)).digest("hex").slice(0, 16)}`);
 
   // 4. Build timestamp (for cache busting on deploy)
   parts.push(`ts:${Date.now()}`);
