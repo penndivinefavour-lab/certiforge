@@ -1,9 +1,17 @@
+// Open Studio Projects Page - Client-side only
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+
+// We'll use window.require or dynamic import for the DB
+declare global {
+  interface Window {
+    openStudioDB?: any;
+  }
+}
 
 interface Project {
   id: string;
@@ -22,71 +30,133 @@ export default function StudioProjectsPage() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Initialize IndexedDB on mount
   useEffect(() => {
-    fetchProjects();
+    initDb();
   }, []);
 
-  const fetchProjects = async () => {
+  async function initDb() {
     try {
-      const res = await fetch('/api/studio/projects');
-      const data = await res.json();
-      if (data.projects) {
-        setProjects(data.projects);
-      }
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
+      // Dynamic import to avoid SSR issues
+      const module = await import('@certiforge/open-studio');
+      const { openStudioDB } = module;
+      
+      // Store for later use
+      (window as any).__openStudioDB = openStudioDB;
+      
+      // Initialize
+      await openStudioDB.init();
+      setDbReady(true);
+      
+      // Fetch projects
+      await loadProjects();
+    } catch (err) {
+      console.error('Failed to initialize Open Studio DB:', err);
+      setError('Failed to initialize local storage. Please ensure IndexedDB is available.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleCreateProject = async () => {
+  async function loadProjects() {
+    try {
+      const db = (window as any).__openStudioDB;
+      if (!db) return;
+      
+      const workspace = await db.getOrCreateWorkspace();
+      const projList = await db.getProjects(workspace.id);
+      
+      setProjects(projList.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        state: p.state,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      })));
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+      setError('Failed to load projects from local storage.');
+    }
+  }
+
+  async function handleCreateProject() {
     if (!newProjectName.trim()) return;
     
     setSaving(true);
     try {
-      const res = await fetch('/api/studio/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newProjectName,
-          description: newProjectDescription || undefined,
-        }),
+      const db = (window as any).__openStudioDB;
+      if (!db) {
+        setError('Database not initialized. Please refresh the page.');
+        return;
+      }
+      
+      const workspace = await db.getOrCreateWorkspace();
+      const project = await db.createProject({
+        workspaceId: workspace.id,
+        name: newProjectName,
+        description: newProjectDescription || undefined,
+        state: 'DRAFT',
       });
       
-      const data = await res.json();
-      if (data.project) {
-        setShowCreateModal(false);
-        setNewProjectName('');
-        setNewProjectDescription('');
-        fetchProjects();
-        router.push(`/studio/projects/${data.project.id}`);
-      }
-    } catch (error) {
-      console.error('Failed to create project:', error);
+      setShowCreateModal(false);
+      setNewProjectName('');
+      setNewProjectDescription('');
+      
+      // Navigate to project
+      router.push(`/studio/projects/${project.id}`);
+    } catch (err) {
+      console.error('Failed to create project:', err);
+      setError('Failed to create project. Please try again.');
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleDeleteProject = async (projectId: string) => {
+  async function handleDeleteProject(projectId: string) {
     if (!confirm('Are you sure you want to delete this project?')) return;
     
     try {
-      await fetch(`/api/studio/projects/${projectId}`, { method: 'DELETE' });
-      setProjects(projects.filter(p => p.id !== projectId));
+      const db = (window as any).__openStudioDB;
+      if (!db) return;
+      
+      await db.deleteProject(projectId);
+      
+      // Refresh list
+      await loadProjects();
     } catch (error) {
       console.error('Failed to delete project:', error);
     }
-  };
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin w-10 h-10 border-2 border-primary border-t-transparent rounded-full" />
-          <p className="text-muted-foreground">Loading projects...</p>
+          <p className="text-muted-foreground">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dbReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
+        <div className="text-center max-w-md p-6">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--foreground)' }}>Storage Unavailable</h2>
+          <p className="text-muted-foreground mb-4">IndexedDB is not available in your browser. Open Studio requires a modern browser with local storage support.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-lg font-medium"
+            style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -98,12 +168,13 @@ export default function StudioProjectsPage() {
       <header className="border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div>
-            <Link href="/" className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
-              ← Back to Home
+            <Link href="/studio" className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
+              ← Back to Studio
             </Link>
             <h1 className="text-2xl font-bold mt-1" style={{ color: 'var(--foreground)' }}>
               My Projects
             </h1>
+            <p className="text-sm text-muted-foreground mt-1">Data stored locally in your browser</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -120,6 +191,12 @@ export default function StudioProjectsPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20" style={{ color: 'var(--destructive)' }}>
+            {error}
+          </div>
+        )}
+        
         {projects.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-4">📁</div>
@@ -149,7 +226,7 @@ export default function StudioProjectsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="rounded-xl border p-6 transition-all hover:shadow-lg"
+                  className="rounded-xl border p-6 transition-all hover:shadow-lg group"
                   style={{
                     borderColor: 'var(--border)',
                     background: 'var(--card)',
@@ -168,6 +245,7 @@ export default function StudioProjectsPage() {
                       onClick={() => handleDeleteProject(project.id)}
                       className="ml-4 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
                       style={{ color: 'var(--destructive)' }}
+                      title="Delete project"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="3 6 5 6 21 6" />
