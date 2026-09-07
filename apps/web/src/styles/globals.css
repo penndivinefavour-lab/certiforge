@@ -82,7 +82,7 @@
   textarea:focus-visible,
   [role="button"]:focus-visible,
   [tabindex="0"]:focus-visible {
-    @apply ring-2 ring-ring ring-offset-2 ring-offset-background rounded;
+    @apply ring-2 ring-[hsl(var(--ring))] ring-offset-2 ring-offset-background rounded;
   }
 
   /* Explicitly disable focus outline on non-interactive elements */
@@ -96,7 +96,7 @@
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))];
     @apply disabled:pointer-events-none disabled:opacity-50;
   }
 
@@ -127,14 +127,14 @@
   .form-input {
     @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm;
     @apply ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium;
-    @apply placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))];
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .form-select {
     @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm;
     @apply appearance-none cursor-pointer;
-    @apply ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))];
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
 
@@ -150,153 +150,8 @@
     @apply text-xs text-destructive mt-1.5;
   }
 
-  .form-fieldset {
-    @apply border-border px-4 py-2.5;
-  }
-
   .card {
     @apply bg-card text-card-foreground rounded-xl border border-border shadow-sm;
-  }
-
-  .data-table {
-    @apply w-full text-sm text-left border-collapse;
-  }
-
-  .data-table-cell {
-    @apply px-4 py-3 border-b border-border whitespace-nowrap;
-  }
-
-  .data-table-header {
-    @apply px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border;
-  }
-
-  .data-table-row {
-    @apply hover:bg-secondary/30 transition-colors;
-  }
-
-  .data-table-search {
-    @apply relative;
-  }
-
-  .data-table-search-input {
-    @apply h-9 w-full pl-9 pr-4 rounded-lg border border-input bg-background py-2 text-sm;
-    @apply ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
-  .data-table-filter {
-    @apply h-9 px-3 rounded-lg border border-input bg-background text-sm font-medium;
-    @apply hover:bg-secondary hover:text-secondary-foreground;
-    @apply data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground;
-  }
-
-  .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
-  }
-
-  .badge-success {
-    @apply bg-green-500/10 text-green-400;
-  }
-
-  .badge-warning {
-    @apply bg-amber-500/10 text-amber-400;
-  }
-
-  .badge-danger {
-    @apply bg-red-500/10 text-red-400;
-  }
-
-  .badge-primary {
-    @apply bg-primary/10 text-primary;
-  }
-
-  .sidebar {
-    @apply flex h-full w-60 flex-col border-r border-border bg-card;
-  }
-
-  .sidebar-logo {
-    @apply flex items-center gap-2 px-4 py-3 text-lg font-bold;
-  }
-
-  .sidebar-section {
-    @apply px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider;
-  }
-
-  .sidebar-nav {
-    @apply flex-1 space-y-1 overflow-y-auto px-2;
-  }
-
-  .sidebar-item {
-    @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground;
-    @apply transition-colors hover:bg-secondary hover:text-secondary-foreground;
-  }
-
-  .sidebar-item.active {
-    @apply bg-primary/10 text-primary;
-  }
-
-  .sidebar-item-icon {
-    @apply flex-shrink-0 text-muted-foreground;
-  }
-
-  .sidebar-footer {
-    @apply border-t border-border p-3;
-  }
-
-  .dashboard-content {
-    @apply flex-1 flex flex-col overflow-hidden;
-  }
-
-  .dashboard-header {
-    @apply flex items-center justify-between px-6 py-4 border-b border-border;
-  }
-
-  .dashboard-header-title {
-    @apply text-2xl font-bold;
-  }
-
-  .dashboard-header-subtitle {
-    @apply text-muted-foreground mt-1;
-  }
-
-  .metric-card {
-    @apply flex flex-col gap-2 p-6 rounded-xl border border-border bg-card;
-  }
-
-  .metric-label {
-    @apply text-sm font-medium text-muted-foreground;
-  }
-
-  .metric-value {
-    @apply text-3xl font-bold tracking-tight;
-  }
-
-  .metric-change {
-    @apply text-sm text-muted-foreground mt-1;
-  }
-
-  .metric-change.positive {
-    @apply text-green-400;
-  }
-
-  .member-row {
-    @apply flex items-center gap-3 p-3 rounded-lg border border-border bg-card;
-  }
-
-  .member-avatar {
-    @apply flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary;
-  }
-
-  .member-name {
-    @apply text-sm font-medium truncate;
-  }
-
-  .member-email {
-    @apply text-xs text-muted-foreground truncate;
-  }
-
-  .member-role {
-    @apply text-xs font-medium self-center text-muted-foreground;
   }
 
   .empty-state {
@@ -316,7 +171,7 @@
   }
 
   .template-card {
-    @apply group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/50 hover:shadow-md transition-all;
+    @apply cursor-pointer rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-md;
   }
 
   .template-preview {
@@ -329,30 +184,5 @@
 
   .template-description {
     @apply text-sm text-muted-foreground mt-1 line-clamp-2;
-  }
-
-  .color-swatch {
-    @apply h-10 w-10 rounded-lg border border-border cursor-pointer p-0 appearance-none;
-  }
-
-  .toast {
-    @apply fixed bottom-4 right-4 flex items-center gap-3 p-4 rounded-lg shadow-lg;
-  }
-}
-
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 }

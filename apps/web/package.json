@@ -15,6 +15,7 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@types/qrcode": "^1.5.6",
+    "autoprefixer": "^10.5.5",
     "bcryptjs": "^3.0.3",
     "fabric": "^7.4.0",
     "framer-motion": "^13.2.0",
@@ -42,7 +43,7 @@
     "jsdom": "^30.0.1",
     "postcss": "^8.4.0",
     "prisma": "^7.10.0",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.6.0",
     "vitest": "^4.1.11"
   }
