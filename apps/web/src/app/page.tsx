@@ -105,9 +105,9 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {['Start Creating', 'Upload Template', 'Import Recipients', 'Generate & Download'].map((step, i) => (
-              <div key={i} className="text-center" tabIndex={-1}>
+              <div key={i} className="text-center">
                 <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 font-bold"
+                  className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 font-bold text-lg"
                   style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
                 >
                   {i + 1}
