@@ -1,5 +1,5 @@
 // Recipients operations (self-contained)
-import { prisma } from "./db";
+import { db } from "./db";
 import type { Recipient, RecipientImport, RecipientImportRow, RecipientMapping } from '@certiforge/types';
 import { z } from "zod";
 
@@ -196,7 +196,7 @@ export async function createRecipientImport(
     mapping: { recipientName?: string; email?: string; courseName?: string; issueDate?: string; instructor?: string; grade?: string; duration?: string; organization?: string; customFields?: Record<string, string> };
   }
 ): Promise<RecipientImport> {
-  const importObj = await prisma.recipientImport.create({
+  const importObj = await db.recipientImport.create({
     data: {
       projectId,
       fileName: input.fileName,
@@ -209,7 +209,7 @@ export async function createRecipientImport(
   });
 
   for (const row of input.parsedData.rows) {
-    await prisma.recipientImportRow.create({
+    await db.recipientImportRow.create({
       data: {
         importId: importObj.id,
         rowNumber: row.rowNumber,
@@ -227,7 +227,7 @@ export async function createRecipient(
   organizationId: string,
   data: { name: string; email?: string; externalId?: string; metadata?: Record<string, unknown> }
 ): Promise<Recipient> {
-  return prisma.recipient.create({
+  return db.recipient.create({
     data: {
       organizationId,
       name: data.name,

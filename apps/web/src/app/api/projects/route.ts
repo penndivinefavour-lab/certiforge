@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import { requirePermission } from "@/lib/auth";
-import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 
 const CreateProjectSchema = z.object({
   organizationId: z.string(),
@@ -38,13 +38,14 @@ export async function GET(request: NextRequest) {
 
     await requirePermission(user.id, orgId, "VIEWER");
 
-    const { page = "1", pageSize = "20" } = searchParams;
+    const page = searchParams.get("page") || "1";
+    const pageSize = searchParams.get("pageSize") || "20";
     const pageNum = parseInt(page, 10);
     const size = parseInt(pageSize, 10);
     const skip = (pageNum - 1) * size;
 
     const [projects, total] = await Promise.all([
-      prisma.project.findMany({
+      db.project.findMany({
         where: { organizationId: orgId },
         include: {
           organization: {
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: size,
       }),
-      prisma.project.count({ where: { organizationId: orgId } }),
+      db.project.count({ where: { organizationId: orgId } }),
     ]);
 
     return NextResponse.json({
@@ -118,14 +119,14 @@ export async function POST(request: NextRequest) {
 
     await requirePermission(user.id, organizationId, "EDITOR");
 
-    const existing = await prisma.project.findFirst({
+    const existing = await db.project.findFirst({
       where: { organizationId, slug },
     });
     if (existing) {
       return NextResponse.json({ error: "Project slug already in use" }, { status: 409 });
     }
 
-    const project = await prisma.project.create({
+    const project = await db.project.create({
       data: {
         organizationId,
         name,
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     // Create initial certificate sequence
     const year = new Date().getFullYear();
-    await prisma.certificateSequence.create({
+    await db.certificateSequence.create({
       data: {
         projectId: project.id,
         year,
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Audit log
-    await prisma.auditLog.create({
+    await db.auditLog.create({
       data: {
         organizationId,
         actorId: user.id,

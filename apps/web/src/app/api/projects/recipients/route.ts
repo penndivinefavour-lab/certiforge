@@ -4,6 +4,7 @@ import { getSession, getUserFromSession } from "@/lib/auth";
 import { requirePermission } from "@/lib/auth";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const CreateRecipientSchema = z.object({
   projectId: z.string(),
@@ -51,7 +52,9 @@ export async function GET(request: NextRequest) {
 
     await requirePermission(user.id, project.organizationId, "VIEWER");
 
-    const { page = "1", pageSize = "20", search } = searchParams;
+    const page = searchParams.get("page") || "1";
+    const pageSize = searchParams.get("pageSize") || "20";
+    const search = searchParams.get("search");
     const pageNum = parseInt(page, 10);
     const size = parseInt(pageSize, 10);
     const skip = (pageNum - 1) * size;

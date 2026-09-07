@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r dev",
-    "build": "pnpm -r build",
+    "dev": "pnpm -r --filter '!worker' dev",
+    "build": "pnpm -r --filter '!worker' build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r --filter '!worker' typecheck",
     "lint": "oxlint",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed"

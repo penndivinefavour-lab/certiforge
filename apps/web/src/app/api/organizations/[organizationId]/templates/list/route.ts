@@ -4,6 +4,7 @@ import { getSession, getUserFromSession } from "@/lib/auth";
 import { requirePermission } from "@/lib/auth";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const TemplateSchema = z.object({
   organizationId: z.string(),

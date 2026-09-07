@@ -4,7 +4,7 @@ import { getSession, getUserFromSession, requirePermission } from '@/lib/auth';
 import { createGenerationJob, completeGenerationJob, getGenerationJob, getJobProgress } from '@/lib/generation';
 import { claimCertificateNumber } from '@/lib/certificates';
 import { generateVerificationToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (projectId) {
-      const jobs = await prisma.generationJob.findMany({
+      const jobs = await db.generationJob.findMany({
         where: { projectId },
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify project access
-    const project = await prisma.project.findUnique({
+    const project = await db.project.findUnique({
       where: { id: projectId },
       select: { organizationId: true },
     });
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     await requirePermission(user.id, project.organizationId, 'ADMIN');
 
     // Find the latest published template version
-    const template = await prisma.template.findFirst({
+    const template = await db.template.findFirst({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
     });
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No template found for this project' }, { status: 400 });
     }
 
-    const templateVersion = await prisma.templateVersion.findFirst({
+    const templateVersion = await db.templateVersion.findFirst({
       where: { templateId: template.id },
       orderBy: { version: 'desc' },
     });
@@ -140,16 +140,10 @@ export async function POST(request: NextRequest) {
       const { certificateNumber } = await claimCertificateNumber(projectId, new Date().getFullYear());
       const verificationToken = generateVerificationToken();
 
-      await prisma.certificate.update({
-        where: { id: certificateId },
-        data: { certificateNumber, verificationToken },
-      });
+      await db.certificate.update({ id: certificateId }, { certificateNumber, verificationToken });
     }
 
-    await prisma.generationJob.update({
-      where: { id: job.id },
-      data: { status: "PROCESSING", startedAt: new Date() },
-    });
+    await db.generationJob.update({ id: job.id }, { status: "PROCESSING", startedAt: new Date() });
 
     return NextResponse.json({
       job: {

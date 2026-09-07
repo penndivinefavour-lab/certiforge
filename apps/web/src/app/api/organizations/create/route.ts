@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const CreateOrgSchema = z.object({
   name: z.string().min(1).max(100),

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
-import type { NextRequest } from "next/server";
+import { z } from "zod";
 
 export async function GET(request: NextRequest) {
   try {

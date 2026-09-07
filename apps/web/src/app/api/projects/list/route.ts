@@ -1,7 +1,8 @@
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const CreateProjectSchema = z.object({
   organizationId: z.string(),
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [projects, total] = await Promise.all([
-      prisma.project.findMany({
+      db.project.findMany({
         where,
         include: {
           organization: {
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: pageSize,
       }),
-      prisma.project.count({ where }),
+      db.project.count({ where }),
     ]);
 
     return new Response(JSON.stringify({
@@ -113,14 +114,14 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: "Organization ID, name and slug are required" }), { status: 400 });
     }
 
-    const existing = await prisma.project.findFirst({
+    const existing = await db.project.findFirst({
       where: { organizationId, slug },
     });
     if (existing) {
       return new Response(JSON.stringify({ error: "Project slug already in use" }), { status: 409 });
     }
 
-    const project = await prisma.project.create({
+    const project = await db.project.create({
       data: {
         organizationId,
         name,
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     // Create certificate sequence
     const year = new Date().getFullYear();
-    await prisma.certificateSequence.create({
+    await db.certificateSequence.create({
       data: {
         projectId: project.id,
         year,

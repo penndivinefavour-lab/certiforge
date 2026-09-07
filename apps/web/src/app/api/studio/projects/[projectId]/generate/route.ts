@@ -123,7 +123,7 @@ export async function POST(
           verificationToken,
           status: 'GENERATED',
           pdfData: rendered.pdfBytes ? `data:application/pdf;base64,${btoa(String.fromCharCode(...rendered.pdfBytes))}` : undefined,
-          qrData: qrDataUrl as string,
+          qrData: qrDataUrl as unknown as string,
           metadata: dynamicValues,
           issuedAt: Date.now(),
         });

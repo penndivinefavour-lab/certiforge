@@ -1,8 +1,9 @@
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import { requirePermission } from "@/lib/auth";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Project ID required" }, { status: 400 });
     }
 
-    const project = await prisma.project.findUnique({
+    const project = await db.project.findUnique({
       where: { id: projectId },
       select: { organizationId: true },
     });
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create template
-    const template = await prisma.template.create({
+    const template = await db.template.create({
       data: {
         projectId,
         name,
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create version from uploaded image
-    const version = await prisma.templateVersion.create({
+    const version = await db.templateVersion.create({
       data: {
         templateId: template.id,
         version: 1,
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create a text element with sample text
-    await prisma.templateElement.create({
+    await db.templateElement.create({
       data: {
         templateId: template.id,
         versionId: version.id,

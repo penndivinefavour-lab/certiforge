@@ -75,7 +75,7 @@ export default function EditorPage() {
 
     const initCanvas = async () => {
       const fabricModule = await fabric;
-      const mod: any = fabricModule.default || fabricModule;
+      const mod: any = (fabricModule as any).default || fabricModule;
       const { Canvas } = mod;
 
       const canvasInstance = new Canvas(canvasRef.current, {
@@ -85,7 +85,7 @@ export default function EditorPage() {
         preserveObjectStacking: true,
       });
 
-      fabricRef.current = canvas;
+      fabricRef.current = canvasInstance;
 
       // Load elements from API
       await loadTemplate();

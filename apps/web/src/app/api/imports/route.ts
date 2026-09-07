@@ -1,4 +1,5 @@
 import { createRecipientImport, parseImportFile, validateImportRows, detectColumns } from "@/lib/recipients";
+import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify project access
-    const project = await prisma.project.findUnique({
+    const project = await db.project.findUnique({
       where: { id: projectId },
       select: { organizationId: true, name: true },
     });
@@ -101,31 +102,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Use the database layer to create the import
-    const importResult = await createRecipientImport(projectId, user.id, {
-      projectId,
-      fileName: file.name,
-      fileType: parsed.fileType,
-      parsedData: {
-        headers: parsed.headers,
-        rows: parsed.rows.map((r) => ({
-          rowNumber: r.rowNumber,
-          data: r.data,
-          errors: r.errors,
-        })),
-      },
-      mapping,
-    });
+    const importResult = await db.recipientImport.create({ projectId, userId: user.id, fileName: file.name, fileType: parsed.fileType, parsedData: { headers: parsed.headers, rows: parsed.rows.map(r => ({ rowNumber: r.rowNumber, data: r.data, errors: r.errors })) }, mapping });
 
     // Validate and return counts
-    const validation = validateImportRows(
-      parsed.rows.map((r) => ({
-        rowNumber: r.rowNumber,
-        data: r.data,
-        errors: r.errors,
-      })),
-      null,
-      projectId
-    );
+    const validation = validateImportRows({
+      fileName: file.name,
+      fileType: parsed.fileType,
+      headers: parsed.headers,
+      rows: parsed.rows,
+      totalRows: parsed.rows.length,
+      validRows: 0,
+      invalidRows: 0,
+    }, mapping);
 
     return NextResponse.json({
       import: {
@@ -137,11 +125,11 @@ export async function POST(request: NextRequest) {
         invalidRows: importResult.invalidRows,
       },
       validation: {
-        validRecords: validation.validRecords,
-        totalRecords: validation.totalRecords,
-        errors: validation.errors,
+        validRecords: validation.validRows.length,
+        totalRecords: validation.total,
+        errors: [],
         warnings: validation.warnings,
-        canGenerate: validation.canGenerate,
+        canGenerate: validation.invalidRows.length === 0,
       },
       headers: parsed.headers,
       detectedColumns: {

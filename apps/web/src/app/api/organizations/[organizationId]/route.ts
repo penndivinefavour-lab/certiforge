@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {

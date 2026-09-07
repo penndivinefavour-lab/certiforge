@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { motion } from "framer-motion";
 
 export default function CreateTemplateFromLibraryPage() {
   const router = useRouter();

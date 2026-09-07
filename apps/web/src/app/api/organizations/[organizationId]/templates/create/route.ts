@@ -1,9 +1,10 @@
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import { requirePermission } from "@/lib/auth";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const CreateTemplateSchema = z.object({
   organizationId: z.string(),
@@ -40,13 +41,13 @@ export async function POST(request: NextRequest) {
     const { organizationId, name, description, format, orientation, backgroundColor } = parsed.data;
 
     // Find or create a project for this organization
-    let project = await prisma.project.findFirst({
+    let project = await db.project.findFirst({
       where: { organizationId, state: "DRAFT" },
       orderBy: { createdAt: "asc" },
     });
 
     if (!project) {
-      project = await prisma.project.create({
+      project = await db.project.create({
         data: {
           organizationId,
           name: `${name} Project`,
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
 
       // Create certificate sequence
       const year = new Date().getFullYear();
-      await prisma.certificateSequence.create({
+      await db.certificateSequence.create({
         data: {
           projectId: project.id,
           year,
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const template = await prisma.template.create({
+    const template = await db.template.create({
       data: {
         projectId: project.id,
         name,
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create initial version
-    await prisma.templateVersion.create({
+    await db.templateVersion.create({
       data: {
         templateId: template.id,
         version: 1,

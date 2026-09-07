@@ -1,5 +1,6 @@
 // CertiForge Database Client - Hybrid: Raw queries + Prisma-like interface
 import { Client } from 'pg';
+import type { QueryResult, QueryResultRow } from 'pg';
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://certiforge:***@localhost:5432/certiforge';
 
@@ -202,6 +203,34 @@ const db = {
       const sql = `SELECT * FROM projects WHERE id = $1 LIMIT 1`;
       return await queryOne(sql, [where.id]);
     },
+    findFirst: async (where?: any) => {
+      let sql = 'SELECT * FROM projects';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.id) { conditions.push(`id = $${conditions.length + 1}`); params.push(where.id); }
+        if (where.organizationId) { conditions.push(`organizationId = $${conditions.length + 1}`); params.push(where.organizationId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      sql += ' LIMIT 1';
+      return await queryOne(sql, params);
+    },
+    count: async (where?: any) => {
+      let sql = 'SELECT COUNT(*) as count FROM projects';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.id) { conditions.push(`id = $${conditions.length + 1}`); params.push(where.id); }
+        if (where.organizationId) { conditions.push(`organizationId = $${conditions.length + 1}`); params.push(where.organizationId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      const result = await queryOne(sql, params);
+      return result ? parseInt(result.count, 10) : 0;
+    },
     findMany: async (where?: any) => {
       let sql = 'SELECT * FROM projects';
       const params: any[] = [];
@@ -311,9 +340,31 @@ const db = {
       return await query(sql, params);
     },
     create: async (data: any) => {
-      const sql = `INSERT INTO template_versions (templateId, version, elements, pdfUrl, createdAt, updatedAt) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *`;
-      const result = await query(sql, [data.templateId, data.version, JSON.stringify(data.elements), data.pdfUrl]);
+      const sql = `INSERT INTO template_versions (templateId, version, elements, pdfUrl, backgroundColor, orientation, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING *`;
+      const result = await query(sql, [data.templateId, data.version, JSON.stringify(data.elements), data.pdfUrl, data.backgroundColor, data.orientation]);
       return result[0];
+    },
+    update: async (where: any, data: any) => {
+      const setClauses: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+      const allowedFields = ['name', 'width', 'height', 'backgroundColor', 'orientation', 'elements'];
+      for (const key of allowedFields) {
+        if (data[key] !== undefined) {
+          setClauses.push(`${key} = $${paramIndex++}`);
+          params.push(key === 'elements' ? JSON.stringify(data[key]) : data[key]);
+        }
+      }
+      const whereClauses: string[] = [];
+      if (where.id) { whereClauses.push(`id = $${paramIndex++}`); params.push(where.id); }
+      const sql = `UPDATE template_versions SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
+      const result = await query(sql, params);
+      return result[0];
+    },
+    delete: async (where: any) => {
+      const sql = `DELETE FROM template_versions WHERE id = $1`;
+      await execute(sql, [where.id]);
+      return true;
     }
   },
   
@@ -329,6 +380,11 @@ const db = {
       }
       sql += whereClause;
       return await query(sql, params);
+    },
+    create: async (data: any) => {
+      const sql = `INSERT INTO template_elements (templateId, versionId, type, name, x, y, width, height, rotation, opacity, visible, locked, zIndex, data, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()) RETURNING *`;
+      const result = await query(sql, [data.templateId, data.versionId, data.type, data.name, data.x, data.y, data.width, data.height, data.rotation, data.opacity, data.visible, data.locked, data.zIndex, JSON.stringify(data.data)]);
+      return result[0];
     }
   },
   
@@ -353,12 +409,27 @@ const db = {
     bulkCreate: async (data: any[]) => {
       const results: any[] = [];
       for (const recipient of data) {
-        const result = await this.create(recipient);
-        if (result) {
-          results.push(result);
+        if (recipient && typeof recipient === 'object' && recipient.name) {
+          const result = await db.recipient.create(recipient);
+          if (result != null) {
+            results.push(result);
+          }
         }
       }
       return results;
+    },
+    count: async (where?: any) => {
+      let sql = 'SELECT COUNT(*) as count FROM recipients';
+      const params: any[] = [];
+      let whereClause = '';
+      if (where) {
+        const conditions: string[] = [];
+        if (where.projectId) { conditions.push(`projectId = $${conditions.length + 1}`); params.push(where.projectId); }
+        if (conditions.length > 0) whereClause = ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += whereClause;
+      const result = await queryOne(sql, params);
+      return result ? parseInt(result.count, 10) : 0;
     }
   },
   
@@ -422,7 +493,7 @@ const db = {
       const params: any[] = [];
       let paramIndex = 1;
       
-      const allowedFields = ['status', 'metadata', 'revokedAt', 'revocationReason'];
+      const allowedFields = ['status', 'metadata', 'revokedAt', 'revocationReason', 'certificateNumber', 'verificationToken'];
       for (const key of allowedFields) {
         if (data[key] !== undefined) {
           setClauses.push(`${key} = $${paramIndex++}`);
@@ -437,6 +508,11 @@ const db = {
       const sql = `UPDATE certificates SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')} RETURNING *`;
       const result = await query(sql, params);
       return result[0];
+    },
+    delete: async (where: any) => {
+      const sql = `DELETE FROM certificates WHERE id = $1`;
+      await execute(sql, [where.id]);
+      return true;
     }
   },
   

@@ -1,9 +1,10 @@
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { getSession, getUserFromSession } from "@/lib/auth";
 import { requirePermission } from "@/lib/auth";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const CreateVersionSchema = z.object({
   templateId: z.string(),
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     const templateId = searchParams.get("templateId");
 
     if (versionId) {
-      const version = await prisma.templateVersion.findUnique({
+      const version = await db.templateVersion.findUnique({
         where: { id: versionId },
         include: { elements: { orderBy: { zIndex: "asc" } } },
       });
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (templateId) {
-      const versions = await prisma.templateVersion.findMany({
+      const versions = await db.templateVersion.findMany({
         where: { templateId },
         include: { elements: { orderBy: { zIndex: "asc" } } },
         orderBy: { version: "desc" },
@@ -92,19 +93,19 @@ export async function POST(request: NextRequest) {
     const { templateId, name, width, height, backgroundColor, orientation, elements, background } = parsed.data;
 
     // Verify template exists
-    const template = await prisma.template.findUnique({ where: { id: templateId } });
+    const template = await db.template.findUnique({ where: { id: templateId } });
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
     // Get next version number
-    const lastVersion = await prisma.templateVersion.findFirst({
+    const lastVersion = await db.templateVersion.findFirst({
       where: { templateId },
       orderBy: { version: "desc" },
     });
     const nextVersion = (lastVersion?.version ?? 0) + 1;
 
-    const version = await prisma.templateVersion.create({
+    const version = await db.templateVersion.create({
       data: {
         templateId,
         version: nextVersion,
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     // Create template elements
     for (const elem of elements) {
-      await prisma.templateElement.create({
+      await db.templateElement.create({
         data: {
           templateId,
           versionId: version.id,
