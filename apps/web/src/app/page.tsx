@@ -102,10 +102,10 @@ export default function Home() {
           <h2 className="text-3xl font-bold text-center mb-12" style={{ color: 'var(--foreground)' }}>
             How It Works
           </h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {['Start Creating', 'Upload Template', 'Import Recipients', 'Generate & Download'].map((step, i) => (
-              <div key={i} className="text-center">
+              <div key={i} className="text-center" tabIndex={-1}>
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 font-bold"
                   style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
