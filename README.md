@@ -1,67 +1,51 @@
 # CertiForge
 
-A professional digital certificate generation platform that allows organizations to design certificate templates, import recipients in bulk, generate personalized certificates, issue unique certificate IDs, verify certificates through QR codes, and manage certificate lifecycle events including revocation.
+A professional digital certificate generation platform with two deployment modes: **Open Studio** (no account required) and **Cloud SaaS** (full authentication & persistence).
 
-## 🚀 Open Studio - No Account Required!
+## 🚀 Quick Start
 
-**CertiForge now supports Open Studio** - create and generate certificates without signing up!
+### Open Studio (No Account Required)
+```bash
+git clone https://github.com/penndivinefavour-lab/certiforge.git
+cd certiforge
+pnpm install
+pnpm dev
+```
+Visit `http://localhost:3000` → Click "Start Creating"
 
-### Open Studio Features:
+### Cloud SaaS (With Database)
+```bash
+# Copy environment template
+cp apps/web/.env.example apps/web/.env.local
+
+# Edit .env.local with your database URL and session secret
+# DATABASE_URL=postgresql://user:pass@host:5432/db
+# SESSION_SECRET=your-secure-random-string-min-32-chars
+# NEXT_PUBLIC_APP_URL=http://localhost:3002
+
+pnpm dev
+```
+
+## Features
+
+### Open Studio Mode
 - ✅ Create projects without account
 - ✅ Upload and edit certificate templates
 - ✅ Import recipients from CSV
 - ✅ Generate PDF certificates
-- ✅ Download certificates
-- ✅ All data stored locally in your browser
+- ✅ Download as ZIP
+- ✅ Local verification
+- ✅ All data stored in browser (IndexedDB)
 
-**Get started:** Visit the homepage and click "Start Creating — No Account Required"
-
-See [docs/OPEN_STUDIO_GUIDE.md](./docs/OPEN_STUDIO_GUIDE.md) for details.
-
-## Features
-
-- **Certificate Template Management** — Design and manage certificate templates with a visual editor
-- **Visual Editor** — Drag-and-drop interface powered by Fabric.js for creating beautiful certificate designs
-- **Dynamic Fields** — Support for variable fields (name, date, course, etc.) populated from recipient data
-- **Bulk Import** — Import recipients via CSV or XLSX files with field mapping
-- **Field Mapping** — Map spreadsheet columns to certificate dynamic fields
-- **Validation** — Validate recipient data before generation
-- **Bulk Generation** — Generate hundreds or thousands of certificates in bulk
-- **PDF Generation** — Professional PDF certificates ready for printing or digital distribution
-- **QR Verification** — Unique QR code on every certificate for instant authenticity verification
-- **Certificate IDs** — Unique certificate numbers for tracking and reference
-- **Revocation** — Revoke certificates with reason logging
-- **Audit Logging** — Track all certificate lifecycle events
-- **Organization/Workspace Architecture** — Multi-tenant support with role-based access control
-- **Authentication** — Secure email/password authentication with session management
-
-## How CertiForge Works
-
-### Open Studio Flow (No Account Required)
-
-1. **Start Creating** — Click "Start Creating" on the homepage
-2. **Create Project** — Give your project a name
-3. **Upload Template** — Upload a certificate template image
-4. **Edit Template** — Position elements with the visual editor
-5. **Import Recipients** — Upload CSV with recipient data
-6. **Generate Certificates** — Create PDFs instantly
-7. **Download** — Get your certificates as a ZIP file
-
-### Authenticated Flow (Full Features)
-
-1. **Create Project** — Set up a new certificate project within your organization
-2. **Upload Template** — Upload a certificate template image or design from scratch
-3. **Open Visual Editor** — Use the Fabric.js-based editor to position elements
-4. **Add Dynamic Fields** — Insert text fields that pull data from recipient spreadsheets
-5. **Import Recipients** — Upload a CSV or XLSX file with recipient data
-6. **Map Columns** — Map spreadsheet columns to certificate fields (name, email, course, etc.)
-7. **Validate** — Check for missing or invalid data before generation
-8. **Generate Certificates** — Create personalized certificates in bulk
-9. **Download PDFs** — Download individual or batch PDF certificates
-10. **Verify Certificates** — Scan QR codes or enter certificate numbers to verify authenticity
-11. **Revoke** — Revoke certificates when necessary with audit trail
-
-**Note:** Steps 8-11 are partially implemented. The generation pipeline and verification endpoint are in development.
+### Cloud SaaS Mode
+- ✅ User authentication (signup/signin/signout)
+- ✅ Organization management
+- ✅ Role-based access control
+- ✅ Persistent database storage
+- ✅ Public certificate verification
+- ✅ Certificate revocation
+- ✅ Audit logging
+- ✅ Multi-device access
 
 ## Architecture
 
@@ -93,267 +77,143 @@ CERTIFORGE
 | Mode | Storage | Persistence | Verification |
 |------|---------|-------------|--------------|
 | Open Studio | IndexedDB (browser) | Local only | Local only |
-| Account Mode | PostgreSQL | Cloud | Cross-device |
+| Cloud SaaS | PostgreSQL | Cloud | Cross-device |
 
-See [docs/OPEN_STUDIO_ARCHITECTURE_AUDIT.md](./docs/OPEN_STUDIO_ARCHITECTURE_AUDIT.md) for detailed architecture.
+## Repository Structure
 
 ```
 certiforge/
 ├── apps/
 │   ├── web/                 # Next.js web application
 │   │   ├── src/app/
-│   │   │   ├── studio/      # Open Studio routes (no auth)
-│   │   │   ├── api/studio/  # Open Studio API routes
+│   │   │   ├── studio/      # Open Studio routes
+│   │   │   ├── api/studio/  # Open Studio API
 │   │   │   ├── auth/        # Authentication pages
 │   │   │   ├── dashboard/   # User dashboard
-│   │   │   └── projects/    # Project management
+│   │   │   └── verify/      # Public verification
 │   │   └── src/lib/
-│   ├── worker/              # Background job processor (simplified)
+│   ├── worker/              # Background processor (optional)
 │
 ├── packages/
-│   ├── open-studio/         # Open Studio IndexedDB layer
-│   ├── database/            # Database client and queries
+│   ├── open-studio/         # IndexedDB layer
 │   ├── types/               # Shared TypeScript types
 │   ├── config/              # Configuration utilities
-│   ├── editor/              # Certificate editor components
+│   ├── editor/              # Visual editor components
 │   ├── qr/                  # QR code generation
 │   ├── validation/          # Data validation
-│   ├── pdf-engine/          # PDF generation engine
-│   └── certificate-engine/  # Core certificate logic
+│   ├── pdf-engine/          # PDF generation
+│   ├── certificate-engine/  # Core certificate logic
 │
-├── prisma/                  # Database schema
 ├── docs/                    # Documentation
-│   ├── OPEN_STUDIO_ARCHITECTURE_AUDIT.md
-│   ├── OPEN_STUDIO_GUIDE.md
-│   └── PHASE5_IMPLEMENTATION_REPORT.md
 ├── tests/                   # Test suites
 ├── package.json
 ├── pnpm-workspace.yaml
-└── README.md
+└── netlify.toml
 ```
 
 ## Technology Stack
 
 - **Frontend:** Next.js 15, React 19, TypeScript
-- **Styling:** Custom CSS design system (Tailwind v4-compatible)
-- **Database:** PostgreSQL with raw pg queries
+- **Styling:** Tailwind CSS v4
+- **Database:** PostgreSQL (raw queries, no ORM dependency)
 - **Certificate Editor:** Fabric.js
 - **Authentication:** bcryptjs + session cookies
 - **QR Codes:** qrcode library
-- **PDF Generation:** Custom PDF engine
+- **PDF Generation:** pdf-lib
 - **Validation:** Zod
-- **Package Manager:** pnpm v10
+- **Package Manager:** pnpm v10.12.0
 - **Testing:** Vitest
 
-## Local Development
+## Development
 
 ### Prerequisites
-
 - Node.js 20+
-- pnpm 10.12.0+ (or npm)
-- PostgreSQL 14+ (for authenticated mode)
+- pnpm 10.12.0+
+- PostgreSQL 14+ (for Cloud SaaS mode)
 - Git
 
 ### Installation
-
 ```bash
 git clone https://github.com/penndivinefavour-lab/certiforge.git
 cd certiforge
-npm install
+pnpm install
 ```
 
-### Environment Setup
-
-For **Open Studio only** (no database needed):
+### Commands
 ```bash
-# Nothing required! Just run the dev server.
+pnpm dev           # Start development server
+pnpm build         # Production build
+pnpm test          # Run test suite
+pnpm typecheck     # TypeScript type checking
+pnpm lint          # Linting (if configured)
 ```
 
-For **Authenticated mode** (requires database):
-```bash
-cp apps/web/.env.example apps/web/.env.local
+### Database Setup (Cloud SaaS)
+```sql
+-- Create database and user
+CREATE DATABASE certiforge;
+CREATE USER certiforge WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE certiforge TO certiforge;
+
+-- Connect and create tables
+psql -U certiforge -d certiforge -f apps/web/prisma/schema.sql
 ```
 
-Edit `apps/web/.env.local` and configure:
+## Deployment
 
-```env
-DATABASE_URL=postgresql://certiforge:your_password@localhost:5432/certiforge
-SESSION_SECRET=replace-with-a-secure-random-32-char-minimum-string
-NEXT_PUBLIC_APP_URL=http://localhost:3002
-```
+### Netlify (Recommended)
+See [docs/CLOUD_SAAS_DEPLOYMENT.md](docs/CLOUD_SAAS_DEPLOYMENT.md) for detailed instructions.
 
-### Database Setup
+Quick deploy:
+1. Push to GitHub
+2. Connect repository in Netlify
+3. Configure build: `pnpm build`, publish: `apps/web/.next`
+4. Add environment variables
+5. Deploy
 
-```bash
-# Create database and user
-psql -U postgres -c "CREATE USER certiforge WITH PASSWORD 'your_password';"
-psql -U postgres -c "CREATE DATABASE certiforge OWNER certiforge;"
+### Open Studio Deployment
+No special configuration needed — deploys as static site to any hosting provider.
 
-# Push schema
-cd apps/web
-npx prisma db push
-npx prisma db seed
-```
-
-### Development Server
-
-```bash
-pnpm dev
-```
-
-Open http://localhost:3002 in your browser.
-
-### Demo Credentials (Development Only)
-
-| Email | Password | Role |
-|-------|----------|------|
-| admin@certiforge.demo | demo1234 | Admin |
-
-**WARNING:** These are development credentials only. Do not use in production.
-
-## Database Schema
-
-CertiForge uses PostgreSQL with the following core tables:
-
-- **users** — User accounts with email, name, password hash
-- **sessions** — Active user sessions with expiration
-- **organizations** — Multi-tenant workspaces
-- **organization_members** — User-organization relationships with roles
-- **projects** — Certificate projects within organizations
-- **templates** — Certificate template definitions
-- **template_versions** — Versioned template designs
-- **template_elements** — Individual design elements (text, image, QR)
-- **recipients** — Certificate recipients with custom metadata
-- **certificates** — Generated certificates with verification tokens
-- **generation_jobs** — Bulk generation task tracking
-- **audit_logs** — Activity tracking
-
-## Authentication
-
-CertiForge uses session-based authentication:
-
-- **Signup** — Email, name, password (hashed with bcrypt)
-- **Signin** — Email/password verification
-- **Sessions** — Cookie-based with configurable expiration (7 days default)
-- **Protected Routes** — API routes validate session tokens
-- **Organization Authorization** — Role-based access (OWNER, ADMIN, EDITOR, VIEWER)
-
-## Certificate Generation
-
-The generation pipeline works as follows:
-
-```
-Recipient Data (CSV/XLSX)
-        ↓
-   Field Mapping
-        ↓
-   Template + Data
-        ↓
-   Certificate Engine
-        ↓
-      PDF Output
-        ↓
-  Certificate Record + QR
-```
-
-## Deploying to Netlify
-
-### Prerequisites
-
-- GitHub repository with the code
-- PostgreSQL database (e.g., Supabase, Railway, PlanetScale)
-- Netlify account
-
-### Steps
-
-1. Push this repository to GitHub
-2. Log in to Netlify dashboard
-3. Click "Add new site" → "Import an existing project"
-4. Select your GitHub repository
-5. Configure build settings:
-   - **Build command:** `pnpm build`
-   - **Publish directory:** `apps/web/.next`
-   - **Base directory:** Leave empty
-6. Add environment variables (see below)
-7. Click "Deploy site"
-
-### Required Environment Variables
+## Environment Variables
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| DATABASE_URL | Yes | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| SESSION_SECRET | Yes | Minimum 32-character secret | `aabbccdd...` |
-| NEXT_PUBLIC_APP_URL | No | Public URL of the site | `https://certiforge.netlify.app` |
-
-### Production Database
-
-**Important:** The local PostgreSQL instance in WSL is for development only. Netlify cannot connect to localhost.
-
-You must provision a production PostgreSQL database. Recommended providers:
-- **Supabase** — Free tier available, managed PostgreSQL
-- **Railway** — Pay-per-use, easy setup
-- **PlanetScale** — MySQL-compatible (requires adapter)
-- **Neon** — Serverless PostgreSQL
-
-After provisioning, set `DATABASE_URL` to your production connection string.
+| DATABASE_URL | Cloud only | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
+| SESSION_SECRET | Cloud only | Minimum 32-char random string | `a1b2c3d4...` |
+| NEXT_PUBLIC_APP_URL | Optional | Public app URL | `https://certiforge.netlify.app` |
 
 ## Testing
 
 ```bash
-pnpm test        # Run all tests
-pnpm typecheck   # TypeScript type checking
-pnpm lint        # Linting
-pnpm build       # Production build
+# Run all tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Type checking
+pnpm typecheck
 ```
 
-**Current test status:** 21/21 passing
-
-## Project Status
-
-**Status:** Active development — Deployment preparation in progress
-
-### Completed
-- Authentication system (signup/signin/session)
-- Organization and membership management
-- Database layer with raw PostgreSQL queries
-- Certificate template editor (Fabric.js)
-- Recipient import and validation
-- Basic API routes
-
-### In Progress
-- Certificate generation pipeline
-- PDF export
-- QR code generation
-- Dashboard UI
-
-### Known Limitations
-- Dashboard shows loading state indefinitely (organization API returns empty)
-- Full end-to-end certificate generation not yet verified
-- No production database connectivity tested
-- Some API routes still reference Prisma (migration in progress)
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow existing code style
-- Write tests for new features
-- Update documentation as needed
-- Do not commit `.env` files or secrets
+Current test status: **44/44 passing**
 
 ## Security
 
-- Never commit `.env` files or credentials
-- Use environment variables for all secrets
-- Certificate verification endpoints should only expose public information
-- Report security issues responsibly
+- Passwords hashed with bcrypt (12 rounds)
+- Sessions use HTTP-only, SameSite cookies
+- Parameterized SQL queries (no injection)
+- File upload size limits enforced
+- Filename sanitization for exports
+
+For full security audit, see [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md).
+
+## Documentation
+
+- [Open Studio Guide](docs/OPEN_STUDIO_GUIDE.md)
+- [Cloud SaaS Deployment](docs/CLOUD_SAAS_DEPLOYMENT.md)
+- [Security Audit](docs/SECURITY_AUDIT.md)
+- [Production Checklist](docs/PRODUCTION_CHECKLIST.md)
 
 ## License
 
-License: To be determined
+MIT

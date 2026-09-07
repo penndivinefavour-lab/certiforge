@@ -1,97 +1,186 @@
-# Open Studio
+# Open Studio — Standalone Deployment Guide
 
-CertiForge can now be used **without creating an account**.
+## Overview
 
-## Two Modes of Operation
+Open Studio is the no-account-required mode of CertiForge. It runs entirely in the browser with no backend dependencies.
 
-### 1. Open Studio (No Account Required)
+## Architecture
 
-**What works:**
-- ✅ Create projects
-- ✅ Upload and edit certificate templates
-- ✅ Import recipients from CSV
-- ✅ Generate PDF certificates
-- ✅ Download certificates
-- ✅ Verify certificates (locally)
+```
+Browser (Client-Side Only)
+        ↓
+    IndexedDB
+        ↓
+    Local Persistence
+```
 
-**What's stored:**
-- All data is stored **locally in your browser** using IndexedDB
-- No data is sent to any server
-- No account, no email, no password required
+**No server-side processing required.**
 
-**Limitations:**
-- ⚠️ Certificates are only verifiable in the same browser
-- ⚠️ If you clear browser data, certificates are lost
-- ⚠️ No revocation support
-- ⚠️ No cloud backup
+## Deployment Options
 
-### 2. Account Workspace (Future)
+### Option 1: Netlify (Recommended)
 
-**What's preserved:**
-- All authentication code is intact
-- Organization management works
-- Persistent database storage
-- Cross-device verification
-- Certificate revocation
-- Audit logging
+1. Push code to GitHub
+2. Connect repository in Netlify
+3. Configure:
+   - Build command: `pnpm build`
+   - Publish directory: `apps/web/.next`
+4. Deploy
 
-**Coming soon:**
-- Save Open Studio projects to your account
-- Cloud backup and sync
-- Collaborative editing
+**No environment variables required.**
 
-## Getting Started
+### Option 2: Static Hosting
 
-### Open Studio (Recommended for MVP)
+Since Open Studio is a static Next.js app when built:
 
-1. Go to the homepage
-2. Click **"Start Creating — No Account Required"**
-3. Create a project
-4. Upload a template
-5. Import recipients
-6. Generate certificates
+```bash
+# Build for production
+pnpm build
 
-### With Account (Future)
+# The output in apps/web/.next is self-contained
+# Can be served by any static hosting provider
+```
 
-1. Sign up for an account
-2. Create an organization
-3. Create a project
-4. All features available with persistent storage
+Providers:
+- Vercel
+- GitHub Pages
+- Cloudflare Pages
+- Firebase Hosting
+- Any web server (nginx, Apache)
 
-## Migration Path
+### Option 3: Self-Hosted
 
-When Account Mode is ready:
+```bash
+# Clone repository
+git clone https://github.com/penndivinefavour-lab/certiforge.git
+cd certiforge
 
-1. Create project in Open Studio
-2. Sign up / Sign in
-3. Click "Save to Account"
-4. Your workspace is migrated to cloud storage
-5. Access from any device
-6. Full verification and revocation available
+# Install dependencies
+pnpm install
 
-## Privacy
+# Build
+pnpm build
 
-**Open Studio is 100% private:**
-- No data leaves your browser
-- No analytics collected
-- No tracking
-- No servers involved
+# Serve with any static file server
+npx serve apps/web/.next
+```
 
-**Account Workspace will include:**
-- Data stored on servers
-- Potential analytics (opt-out available)
-- Cloud backup
+## Features Available in Open Studio
 
-## Technical Details
+✅ Create projects  
+✅ Upload certificate templates (PDF/Image)  
+✅ Visual template editor  
+✅ Import recipients (CSV)  
+✅ Generate certificates  
+✅ Download as ZIP  
+✅ Verify certificates locally  
 
-### Open Studio Storage
-- **Database**: IndexedDB (`certiforge-open-studio`)
-- **Stores**: workspaces, projects, templates, recipients, certificates
-- **Auto-save**: Yes
-- **Export**: Coming soon
+## Data Storage
 
-### Authenticated Storage
-- **Database**: PostgreSQL
-- **Tables**: projects, templates, recipients, certificates, etc.
-- **Backup**: Yes (database backups)
-- **Sync**: Coming soon
+All data is stored in **browser IndexedDB**:
+- `certiforge-open-studio` database
+- Multiple object stores (projects, templates, recipients, certificates)
+- Local to the user's browser
+- Survives page reloads
+- Cleared on browser data cleanup
+
+**Important:** Data is NOT synchronized across devices. Each browser has its own local storage.
+
+## Limitations
+
+| Feature | Open Studio | Cloud SaaS |
+|---------|-------------|------------|
+| Account | ❌ Not required | ✅ Required |
+| Multi-device sync | ❌ Local only | ✅ Cloud sync |
+| Persistent storage | ⚠️ Browser-dependent | ✅ Database |
+| Team collaboration | ❌ No | ✅ Yes |
+| Organization management | ❌ No | ✅ Yes |
+| Audit logging | ❌ No | ✅ Yes |
+| Certificate revocation | ⚠️ Local only | ✅ Server-side |
+
+## Verification Semantics
+
+### Local Verification (Open Studio)
+- Certificate verification is **local-only**
+- QR codes contain verification URLs pointing to your deployment
+- Verification works if viewer has same browser/storage
+- **Not suitable for public proof of authenticity**
+
+### Public Verification (Cloud SaaS)
+- Server-side certificate registry
+- Anyone can verify via URL
+- Immutable record of issuance
+- Suitable for official credentials
+
+## URL Structure
+
+```
+/                          → Landing page
+/studio                    → Open Studio entry
+/studio/projects           → List projects
+/studio/projects/[id]      → Project detail
+/studio/projects/[id]/editor → Template editor
+/studio/projects/[id]/recipients → Recipient management
+/studio/projects/[id]/generate → Generate certificates
+/studio/verify/[cert]      → Verify certificate (local)
+/verify/[cert]             → Public verification (Cloud mode)
+```
+
+## Customization
+
+### Change App Name
+Edit `apps/web/src/app/studio/page.tsx`:
+```tsx
+<h1>CERTIFORGE</h1>
+<p className="text-xl text-white/60">Your Brand Name</p>
+```
+
+### Customize Storage Key
+Edit `packages/open-studio/src/db.ts`:
+```typescript
+const DB_NAME = 'your-brand-open-studio';
+```
+
+### Modify Validation Rules
+Edit `apps/web/src/lib/recipients.ts` for CSV parsing logic.
+
+## Troubleshooting
+
+### "Cannot open IndexedDB"
+- Ensure HTTPS in production (some browsers restrict IndexedDB on HTTP)
+- Clear browser cache and retry
+- Check browser privacy settings
+
+### Data Loss After Update
+- IndexedDB persists across app updates
+- Version upgrades handled automatically
+- Consider adding export/import feature for backup
+
+### Storage Quota Exceeded
+- Most browsers allow 50MB+ for IndexedDB
+- Large recipient lists may exceed quota
+- Implement pagination or chunking for large datasets
+
+## Performance Notes
+
+- Editor renders best with <500 recipients
+- ZIP generation may freeze UI for >100 certificates
+- Consider Web Workers for heavy processing
+- PDF rendering is CPU-intensive
+
+## Security Considerations
+
+Open Studio data is:
+- ✅ Encrypted at rest (browser handles this)
+- ✅ Isolated per origin
+- ✅ Not accessible to other websites
+- ⚠️ Visible to anyone with browser access
+- ⚠️ Lost if browser data cleared
+
+**Do not store sensitive personal information in Open Studio.**
+
+Use Cloud SaaS mode for:
+- PII processing
+- Official credentials
+- Audit requirements
+- Multi-user scenarios
