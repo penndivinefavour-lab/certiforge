@@ -1,17 +1,10 @@
-// Open Studio Projects Page - Client-side only
+// Open Studio Projects Page - Premium UI
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-
-// We'll use window.require or dynamic import for the DB
-declare global {
-  interface Window {
-    openStudioDB?: any;
-  }
-}
 
 interface Project {
   id: string;
@@ -33,25 +26,17 @@ export default function StudioProjectsPage() {
   const [dbReady, setDbReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize IndexedDB on mount
   useEffect(() => {
     initDb();
   }, []);
 
   async function initDb() {
     try {
-      // Dynamic import to avoid SSR issues
       const module = await import('@certiforge/open-studio');
       const { openStudioDB } = module;
-      
-      // Store for later use
       (window as any).__openStudioDB = openStudioDB;
-      
-      // Initialize
       await openStudioDB.init();
       setDbReady(true);
-      
-      // Fetch projects
       await loadProjects();
     } catch (err) {
       console.error('Failed to initialize Open Studio DB:', err);
@@ -76,7 +61,7 @@ export default function StudioProjectsPage() {
         state: p.state,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
-      })));
+      })) as Project[]);
     } catch (err) {
       console.error('Failed to load projects:', err);
       setError('Failed to load projects from local storage.');
@@ -105,8 +90,6 @@ export default function StudioProjectsPage() {
       setShowCreateModal(false);
       setNewProjectName('');
       setNewProjectDescription('');
-      
-      // Navigate to project
       router.push(`/studio/projects/${project.id}`);
     } catch (err) {
       console.error('Failed to create project:', err);
@@ -124,67 +107,36 @@ export default function StudioProjectsPage() {
       if (!db) return;
       
       await db.deleteProject(projectId);
-      
-      // Refresh list
       await loadProjects();
     } catch (error) {
       console.error('Failed to delete project:', error);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin w-10 h-10 border-2 border-primary border-t-transparent rounded-full" />
-          <p className="text-muted-foreground">Loading workspace...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!dbReady) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
-        <div className="text-center max-w-md p-6">
-          <div className="text-4xl mb-4">⚠️</div>
-          <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--foreground)' }}>Storage Unavailable</h2>
-          <p className="text-muted-foreground mb-4">IndexedDB is not available in your browser. Open Studio requires a modern browser with local storage support.</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 rounded-lg font-medium"
-            style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+    <div className="min-h-screen bg-[hsl(var(--background))]">
       {/* Header */}
-      <header className="border-b" style={{ borderColor: 'var(--border)' }}>
+      <header className="border-b border-[hsl(var(--border))] glass sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div>
-            <Link href="/studio" className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
+            <Link href="/studio" className="text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
               ← Back to Studio
             </Link>
-            <h1 className="text-2xl font-bold mt-1" style={{ color: 'var(--foreground)' }}>
+            <h1 className="text-2xl font-bold mt-1 text-[hsl(var(--foreground))]">
               My Projects
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Data stored locally in your browser</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              Data stored locally in your browser
+            </p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-lg font-medium transition-all hover:scale-105"
-            style={{
-              background: 'var(--primary)',
-              color: 'var(--primary-foreground)',
-            }}
+            className="btn btn-primary gap-2"
           >
-            + New Project
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Project
           </button>
         </div>
       </header>
@@ -192,27 +144,38 @@ export default function StudioProjectsPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20" style={{ color: 'var(--destructive)' }}>
+          <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-sm">
             {error}
           </div>
         )}
         
-        {projects.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-10 h-10 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-[hsl(var(--muted-foreground))] text-sm">Loading workspace...</p>
+          </div>
+        ) : !dbReady ? (
           <div className="text-center py-20">
-            <div className="text-6xl mb-4">📁</div>
-            <h2 className="text-2xl font-semibold mb-2" style={{ color: 'var(--foreground)' }}>
-              No projects yet
-            </h2>
-            <p className="text-muted-foreground mb-6">
-              Create your first project to start generating certificates
+            <div className="text-4xl mb-4">⚠️</div>
+            <h2 className="text-xl font-semibold mb-2 text-[hsl(var(--foreground))]">Storage Unavailable</h2>
+            <p className="text-[hsl(var(--muted-foreground))] mb-4">IndexedDB is not available in your browser.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn btn-secondary"
+            >
+              Retry
+            </button>
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">📁</div>
+            <h2 className="empty-state-title">No projects yet</h2>
+            <p className="empty-state-description">
+              Create your first project to start generating professional certificates
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 rounded-lg font-medium"
-              style={{
-                background: 'var(--primary)',
-                color: 'var(--primary-foreground)',
-              }}
+              className="btn btn-primary mt-6"
             >
               Create First Project
             </button>
@@ -226,25 +189,23 @@ export default function StudioProjectsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="rounded-xl border p-6 transition-all hover:shadow-lg group"
-                  style={{
-                    borderColor: 'var(--border)',
-                    background: 'var(--card)',
-                  }}
+                  className="card card-interactive group"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
+                      <h3 className="font-semibold text-[hsl(var(--foreground))]">
                         {project.name}
                       </h3>
                       {project.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
+                        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 line-clamp-2">
+                          {project.description}
+                        </p>
                       )}
                     </div>
                     <button
                       onClick={() => handleDeleteProject(project.id)}
                       className="ml-4 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
-                      style={{ color: 'var(--destructive)' }}
+                      style={{ color: 'hsl(var(--destructive))' }}
                       title="Delete project"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -254,18 +215,14 @@ export default function StudioProjectsPage() {
                     </button>
                   </div>
                   
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                    <span>📄 {project.state.toLowerCase()}</span>
-                    <span>🕐 {new Date(project.updatedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-4 text-xs text-[hsl(var(--muted-foreground))] mb-4">
+                    <span className="badge badge-success">{project.state.toLowerCase()}</span>
+                    <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
                   </div>
                   
                   <Link
                     href={`/studio/projects/${project.id}`}
-                    className="block w-full py-2 rounded-lg text-center font-medium transition-all hover:scale-105"
-                    style={{
-                      background: 'var(--accent)',
-                      color: 'var(--accent-foreground)',
-                    }}
+                    className="block w-full py-2 rounded-lg text-center text-sm font-medium btn btn-secondary"
                   >
                     Open Project
                   </Link>
@@ -284,7 +241,7 @@ export default function StudioProjectsPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
               onClick={() => setShowCreateModal(false)}
             />
             <motion.div
@@ -293,20 +250,14 @@ export default function StudioProjectsPage() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="fixed inset-0 flex items-center justify-center z-50 p-4"
             >
-              <div
-                className="w-full max-w-md rounded-xl border p-6"
-                style={{
-                  background: 'var(--card)',
-                  borderColor: 'var(--border)',
-                }}
-              >
-                <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--foreground)' }}>
+              <div className="card w-full max-w-md">
+                <h2 className="text-xl font-semibold mb-6 text-[hsl(var(--foreground))]">
                   Create New Project
                 </h2>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                    <label className="form-label">
                       Project Name *
                     </label>
                     <input
@@ -314,18 +265,13 @@ export default function StudioProjectsPage() {
                       value={newProjectName}
                       onChange={(e) => setNewProjectName(e.target.value)}
                       placeholder="e.g., Community Training 2026"
-                      className="w-full px-3 py-2 rounded-lg border outline-none focus:ring-2 focus:ring-primary"
-                      style={{
-                        background: 'var(--background)',
-                        borderColor: 'var(--border)',
-                        color: 'var(--foreground)',
-                      }}
+                      className="form-input"
                       autoFocus
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                    <label className="form-label">
                       Description (optional)
                     </label>
                     <textarea
@@ -333,12 +279,7 @@ export default function StudioProjectsPage() {
                       onChange={(e) => setNewProjectDescription(e.target.value)}
                       placeholder="Brief description of this project..."
                       rows={3}
-                      className="w-full px-3 py-2 rounded-lg border outline-none focus:ring-2 focus:ring-primary resize-none"
-                      style={{
-                        background: 'var(--background)',
-                        borderColor: 'var(--border)',
-                        color: 'var(--foreground)',
-                      }}
+                      className="form-input resize-none"
                     />
                   </div>
                 </div>
@@ -346,22 +287,14 @@ export default function StudioProjectsPage() {
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-2 rounded-lg border font-medium"
-                    style={{
-                      borderColor: 'var(--border)',
-                      color: 'var(--foreground)',
-                    }}
+                    className="btn btn-secondary flex-1"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleCreateProject}
                     disabled={saving || !newProjectName.trim()}
-                    className="flex-1 py-2 rounded-lg font-medium disabled:opacity-50"
-                    style={{
-                      background: 'var(--primary)',
-                      color: 'var(--primary-foreground)',
-                    }}
+                    className="btn btn-primary flex-1 disabled:opacity-50"
                   >
                     {saving ? 'Creating...' : 'Create Project'}
                   </button>

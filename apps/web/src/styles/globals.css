@@ -1,4 +1,4 @@
-/* CertiForge - Global Styles */
+/* CertiForge - Premium Design System */
 
 @tailwind base;
 @tailwind components;
@@ -6,31 +6,54 @@
 
 @layer base {
   :root {
-    --background: 220 20% 5%;
-    --foreground: 213 10% 98%;
-    --card: 220 20% 6%;
-    --card-foreground: 213 10% 98%;
-    --popover: 220 20% 6%;
-    --popover-foreground: 213 10% 98%;
-    --primary: 168 85% 45%;
-    --primary-foreground: 220 20% 5%;
-    --secondary: 215 15% 15%;
-    --secondary-foreground: 213 10% 98%;
-    --muted: 215 15% 15%;
-    --muted-foreground: 217 10% 55%;
-    --accent: 215 15% 15%;
-    --accent-foreground: 213 10% 98%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 213 10% 98%;
-    --border: 214 10% 20%;
-    --input: 214 10% 20%;
-    --ring: 168 85% 45%;
-    --chart-1: 168 85% 45%;
-    --chart-2: 217 60% 55%;
-    --chart-3: 33 90% 60%;
-    --chart-4: 44 90% 60%;
-    --chart-5: 300 60% 60%;
-    --radius: 0.5rem;
+    /* Deep sophisticated dark base */
+    --background: 225 25% 8%;
+    --foreground: 210 20% 98%;
+    
+    /* Surface layers with depth */
+    --card: 225 25% 11%;
+    --card-foreground: 210 20% 98%;
+    --popover: 225 25% 12%;
+    --popover-foreground: 210 20% 98%;
+    
+    /* Primary: Rich violet-purple */
+    --primary: 262 80% 55%;
+    --primary-foreground: 210 20% 98%;
+    
+    /* Secondary: Muted purple-tinted surface */
+    --secondary: 225 20% 16%;
+    --secondary-foreground: 210 20% 98%;
+    
+    /* Subtle muted tones */
+    --muted: 225 20% 15%;
+    --muted-foreground: 220 15% 65%;
+    
+    /* Accent: Soft lavender for highlights */
+    --accent: 265 40% 20%;
+    --accent-foreground: 210 20% 98%;
+    
+    /* Error states */
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 210 20% 98%;
+    
+    /* Borders: Subtle purple-tinted separation */
+    --border: 225 20% 20%;
+    --input: 225 20% 18%;
+    
+    /* Focus ring: Vibrant violet */
+    --ring: 262 80% 55%;
+    
+    /* Chart colors for data visualization */
+    --chart-1: 262 80% 55%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 300 70% 55%;
+    --chart-4: 150 60% 50%;
+    --chart-5: 45 85% 55%;
+    
+    /* Spacing scale */
+    --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --radius-lg: 1rem;
   }
 }
 
@@ -39,81 +62,51 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-poppins), system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-poppins), system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--muted));
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 4px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
-  }
-
-  /* Selection */
+  /* Selection styling */
   ::selection {
-    background: hsl(var(--primary) / 0.3);
+    background: hsl(var(--primary) / 0.25);
     color: hsl(var(--foreground));
-  }
-
-  /* Focus visible - minimal outline only, NO solid bars */
-  :focus-visible {
-    @apply outline-none;
-  }
-
-  /* Only interactive elements should have focus rings */
-  a:focus-visible,
-  button:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
-  [role="button"]:focus-visible,
-  [tabindex="0"]:focus-visible {
-    @apply ring-2 ring-[hsl(var(--ring))] ring-offset-2 ring-offset-background rounded;
-  }
-
-  /* Explicitly disable focus outline on non-interactive elements */
-  .no-focus,
-  [tabindex="-1"] {
-    outline: none !important;
-    box-shadow: none !important;
   }
 }
 
 @layer components {
+  /* Premium button system */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 focus-visible:ring-offset-background;
     @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply active:scale-[0.98];
   }
 
   .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98];
+    @apply bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(270,70%,50%)] text-white shadow-lg shadow-[hsl(var(--primary))/20];
+    @apply hover:from-[hsl(262,80%,60%)] hover:to-[hsl(270,70%,55%)] hover:shadow-xl hover:shadow-[hsl(var(--primary))/30];
   }
 
   .btn-secondary {
-    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 active:scale-[0.98];
+    @apply bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))] border border-[hsl(var(--border))];
+    @apply hover:bg-[hsl(var(--muted))] hover:border-[hsl(var(--primary)/0.3)];
   }
 
   .btn-ghost {
-    @apply bg-transparent text-foreground hover:bg-secondary hover:text-secondary-foreground;
+    @apply bg-transparent text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))];
   }
 
-  .btn-danger {
-    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.98];
+  .btn-outline {
+    @apply bg-transparent border border-[hsl(var(--border))] text-[hsl(var(--foreground))];
+    @apply hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.1)];
   }
 
   .btn-sm {
@@ -121,68 +114,160 @@
   }
 
   .btn-lg {
-    @apply px-6 py-3 text-base;
+    @apply px-6 py-3.5 text-base;
   }
 
+  /* Premium card surfaces */
+  .card {
+    @apply bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6 transition-all duration-200;
+    @apply hover:border-[hsl(var(--primary)/0.3)] hover:shadow-lg hover:shadow-[hsl(var(--primary)/0.05)];
+  }
+
+  .card-interactive {
+    @apply cursor-pointer;
+  }
+
+  /* Form elements */
   .form-input {
-    @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm;
-    @apply ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium;
-    @apply placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))];
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
-  .form-select {
-    @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm;
-    @apply appearance-none cursor-pointer;
-    @apply ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))];
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-4 py-2.5 text-sm;
+    @apply placeholder:text-[hsl(var(--muted-foreground))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--background))];
+    @apply disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200;
   }
 
   .form-label {
-    @apply text-sm font-medium leading-none text-foreground;
+    @apply text-sm font-medium leading-none text-[hsl(var(--foreground))] mb-2;
   }
 
   .form-hint {
-    @apply text-xs text-muted-foreground mt-1.5;
+    @apply text-xs text-[hsl(var(--muted-foreground))] mt-1.5;
   }
 
-  .form-error {
-    @apply text-xs text-destructive mt-1.5;
+  /* Navigation links */
+  .nav-link {
+    @apply text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors duration-150;
   }
 
-  .card {
-    @apply bg-card text-card-foreground rounded-xl border border-border shadow-sm;
+  .nav-link-active {
+    @apply text-[hsl(var(--foreground))] relative;
   }
 
+  .nav-link-active::after {
+    content: '';
+    @apply absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[hsl(var(--primary))];
+  }
+
+  /* Feature cards */
+  .feature-card {
+    @apply bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6 transition-all duration-200;
+    @apply hover:border-[hsl(var(--primary)/0.4)] hover:shadow-lg hover:shadow-[hsl(var(--primary)/0.08)];
+  }
+
+  /* Step indicators */
+  .step-number {
+    @apply w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm bg-gradient-to-br from-[hsl(var(--primary))] to-[hsl(270,70%,45%)] text-white shadow-lg;
+  }
+
+  /* Process connector */
+  .process-connector {
+    @apply hidden md:block absolute top-5 left-[60px] w-[calc(100%-80px)] h-px bg-gradient-to-r from-[hsl(var(--primary)/0.5)] to-transparent;
+  }
+
+  /* Empty state */
   .empty-state {
     @apply flex flex-col items-center justify-center py-16 text-center;
   }
 
   .empty-state-icon {
-    @apply w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4;
+    @apply w-16 h-16 rounded-2xl bg-[hsl(var(--secondary))] flex items-center justify-center mb-4 text-2xl;
   }
 
   .empty-state-title {
-    @apply text-lg font-semibold mt-4;
+    @apply text-lg font-semibold text-[hsl(var(--foreground))] mt-4;
   }
 
   .empty-state-description {
-    @apply text-sm text-muted-foreground mt-1 max-w-sm;
+    @apply text-sm text-[hsl(var(--muted-foreground))] mt-2 max-w-sm;
   }
 
-  .template-card {
-    @apply cursor-pointer rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-md;
+  /* Tooltip */
+  .tooltip {
+    @apply absolute z-50 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded shadow-lg opacity-0 invisible transition-all duration-200;
   }
 
-  .template-preview {
-    @apply flex items-center justify-center rounded-lg mb-3 overflow-hidden relative;
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
 
-  .template-name {
-    @apply font-semibold text-base mt-3;
+  .badge-primary {
+    @apply bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] border border-[hsl(var(--primary)/0.3)];
   }
 
-  .template-description {
-    @apply text-sm text-muted-foreground mt-1 line-clamp-2;
+  .badge-success {
+    @apply bg-emerald-500/15 text-emerald-400 border border-emerald-500/30;
+  }
+
+  .badge-warning {
+    @apply bg-amber-500/15 text-amber-400 border border-amber-500/30;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer utilities {
+  /* Gradient text utility */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(270,70%,60%)];
+  }
+
+  /* Subtle glow effects */
+  .glow-primary {
+    box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.3);
+  }
+
+  .glow-subtle {
+    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.15);
+  }
+
+  /* Glass morphism effect */
+  .glass {
+    @apply bg-[hsl(var(--card)/0.8)] backdrop-blur-lg border border-[hsl(var(--border)/0.5)];
+  }
+
+  /* Gradient border */
+  .gradient-border {
+    position: relative;
+    @apply rounded-xl;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, hsl(var(--primary)/0.5), transparent 60%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
   }
 }
