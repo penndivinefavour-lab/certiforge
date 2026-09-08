@@ -1,5 +1,11 @@
 // Open Studio Package - Client-side certificate generation
-export { openStudioDB } from './db';
+import { openStudioDB } from './db';
+
+// Default export for dynamic imports
+export default openStudioDB;
+
+// Named exports
+export { openStudioDB };
 export type {
   OpenStudioProject,
   OpenStudioTemplate,

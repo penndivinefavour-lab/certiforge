@@ -104,27 +104,46 @@ class OpenStudioDB {
       return this.initPromise;
     }
 
+    console.log('[OpenStudio] DB init started');
+
     this.initPromise = new Promise((resolve, reject) => {
+      // Check if indexedDB is available
+      if (typeof indexedDB === 'undefined') {
+        console.error('[OpenStudio ERROR] indexedDB not available');
+        this.initPromise = null;
+        reject(new Error('IndexedDB is not available in this browser'));
+        return;
+      }
+
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-      request.onerror = () => {
+      request.onerror = (event) => {
+        console.error('[OpenStudio ERROR] Failed to open database:', event);
         this.initPromise = null;
-        reject(request.error);
+        reject(request.error || new Error('Failed to open IndexedDB'));
+      };
+
+      request.onblocked = () => {
+        console.warn('[OpenStudio] Database upgrade blocked by another connection');
+        // Don't reject - just note that blocking occurred
       };
 
       request.onsuccess = () => {
         this.db = request.result;
         this.initPromise = null;
+        console.log('[OpenStudio] DB init complete');
         resolve();
       };
 
       request.onupgradeneeded = (event) => {
+        console.log('[OpenStudio] Database upgrade needed');
         const db = (event.target as IDBOpenDBRequest).result;
 
         // Workspaces store
         if (!db.objectStoreNames.contains(STORES.WORKSPACES)) {
           const workspaceStore = db.createObjectStore(STORES.WORKSPACES, { keyPath: 'id' });
           workspaceStore.createIndex('createdAt', 'createdAt');
+          console.log('[OpenStudio] Created workspaces store');
         }
 
         // Projects store
@@ -133,6 +152,7 @@ class OpenStudioDB {
           projectStore.createIndex('workspaceId', 'workspaceId');
           projectStore.createIndex('name', 'name');
           projectStore.createIndex('createdAt', 'createdAt');
+          console.log('[OpenStudio] Created projects store');
         }
 
         // Templates store
@@ -140,6 +160,7 @@ class OpenStudioDB {
           const templateStore = db.createObjectStore(STORES.TEMPLATES, { keyPath: 'id' });
           templateStore.createIndex('projectId', 'projectId');
           templateStore.createIndex('createdAt', 'createdAt');
+          console.log('[OpenStudio] Created templates store');
         }
 
         // Recipients store
@@ -147,6 +168,7 @@ class OpenStudioDB {
           const recipientStore = db.createObjectStore(STORES.RECIPIENTS, { keyPath: 'id' });
           recipientStore.createIndex('projectId', 'projectId');
           recipientStore.createIndex('name', 'name');
+          console.log('[OpenStudio] Created recipients store');
         }
 
         // Certificates store
@@ -156,11 +178,13 @@ class OpenStudioDB {
           certStore.createIndex('recipientId', 'recipientId');
           certStore.createIndex('certificateNumber', 'certificateNumber');
           certStore.createIndex('status', 'status');
+          console.log('[OpenStudio] Created certificates store');
         }
 
         // Generation jobs store
         if (!db.objectStoreNames.contains(STORES.GENERATION_JOBS)) {
           db.createObjectStore(STORES.GENERATION_JOBS, { keyPath: 'id' });
+          console.log('[OpenStudio] Created generation-jobs store');
         }
       };
     });
@@ -178,18 +202,33 @@ class OpenStudioDB {
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([storeName], mode);
+      let transaction: IDBTransaction | null = null;
+      
+      try {
+        transaction = this.db!.transaction([storeName], mode);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      
       const store = transaction.objectStore(storeName);
       
       callback(store)
-        .then(resolve)
-        .catch(reject);
+        .then(result => {
+          resolve(result);
+        })
+        .catch(error => {
+          reject(error);
+        });
       
       transaction.oncomplete = () => {
-        // Only resolve if not already resolved
-        if (resolve === undefined) return;
+        // Transaction completed successfully
       };
-      transaction.onerror = (event) => reject(transaction.error);
+      
+      transaction.onerror = (event) => {
+        const error = transaction?.error || event.target;
+        reject(error);
+      };
     });
   }
 
@@ -613,8 +652,8 @@ class OpenStudioDB {
 // Singleton instance
 export const openStudioDB = new OpenStudioDB();
 
-// Initialize on import (best-effort, don't block)
-openStudioDB.init().catch(console.error);
+// NOTE: Do NOT call init() here. Initialization should be explicit
+// when needed by components. Leaving this would cause issues in SSR.
 
 // Helper to get current workspace
 export async function getCurrentWorkspace(): Promise<OpenStudioWorkspace> {
