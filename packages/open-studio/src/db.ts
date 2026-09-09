@@ -1,4 +1,4 @@
-// Open Studio IndexedDB Storage Layer
+// Open Studio IndexedDB Storage Layer - Phase 5.8.3 Runtime Stabilization
 // Provides local persistence for the no-auth certificate generation workflow
 
 // Ensure browser types are available
@@ -6,6 +6,7 @@
 
 const DB_NAME = 'certiforge-open-studio';
 const DB_VERSION = 1;
+const INIT_TIMEOUT_MS = 5000; // 5 second safety timeout
 
 // Store names
 const STORES = {
@@ -93,101 +94,96 @@ function generateId(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Database class
+// Database class with robust initialization
 class OpenStudioDB {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  private isInitialized = false;
 
   async init(): Promise<void> {
-    // Return existing promise if already initializing
+    console.log('[CertiForge][OpenStudio] IndexedDB init START');
+
+    // Return existing promise if already initializing (idempotent)
     if (this.initPromise) {
+      console.log('[CertiForge][OpenStudio] IndexedDB init reusing existing promise');
       return this.initPromise;
     }
 
-    console.log('[OpenStudio] DB init started');
+    // If already initialized, return immediately
+    if (this.isInitialized && this.db) {
+      console.log('[CertiForge][OpenStudio] IndexedDB already initialized');
+      return;
+    }
 
-    this.initPromise = new Promise((resolve, reject) => {
+    // Safety timeout - ensure we never hang indefinitely
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('[CertiForge][OpenStudio] IndexedDB init timeout after 5s'));
+      }, INIT_TIMEOUT_MS);
+    });
+
+    this.initPromise = new Promise<void>((resolve, reject) => {
       // Check if indexedDB is available
-      if (typeof indexedDB === 'undefined') {
-        console.error('[OpenStudio ERROR] indexedDB not available');
+      if (typeof indexedDB === 'undefined' || !indexedDB) {
+        console.error('[CertiForge][OpenStudio][ERROR] indexedDB not available');
         this.initPromise = null;
         reject(new Error('IndexedDB is not available in this browser'));
         return;
       }
 
+      const startTime = performance.now();
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = (event) => {
-        console.error('[OpenStudio ERROR] Failed to open database:', event);
+        const elapsed = performance.now() - startTime;
+        console.error(`[CertiForge][OpenStudio][ERROR] IndexedDB open failed after ${elapsed.toFixed(0)}ms:`, request.error);
         this.initPromise = null;
         reject(request.error || new Error('Failed to open IndexedDB'));
       };
 
       request.onblocked = () => {
-        console.warn('[OpenStudio] Database upgrade blocked by another connection');
-        // Don't reject - just note that blocking occurred
+        console.warn('[CertiForge][OpenStudio] Database blocked - another tab may have it open');
+        // Don't reject here - we'll wait for unblock or handle gracefully
       };
 
       request.onsuccess = () => {
+        const elapsed = performance.now() - startTime;
         this.db = request.result;
+        this.isInitialized = true;
         this.initPromise = null;
-        console.log('[OpenStudio] DB init complete');
+        console.log(`[CertiForge][OpenStudio] IndexedDB init END (${elapsed.toFixed(0)}ms)`);
         resolve();
       };
 
       request.onupgradeneeded = (event) => {
-        console.log('[OpenStudio] Database upgrade needed');
         const db = (event.target as IDBOpenDBRequest).result;
+        console.log('[CertiForge][OpenStudio] Database upgrade needed');
 
-        // Workspaces store
-        if (!db.objectStoreNames.contains(STORES.WORKSPACES)) {
-          const workspaceStore = db.createObjectStore(STORES.WORKSPACES, { keyPath: 'id' });
-          workspaceStore.createIndex('createdAt', 'createdAt');
-          console.log('[OpenStudio] Created workspaces store');
-        }
+        // Create all stores if they don't exist
+        const createStore = (name: string, keyPath: string, indexes: string[]) => {
+          if (!db.objectStoreNames.contains(name)) {
+            const store = db.createObjectStore(name, { keyPath });
+            indexes.forEach(idx => store.createIndex(idx, idx));
+            console.log(`[CertiForge][OpenStudio] Created store: ${name}`);
+          }
+        };
 
-        // Projects store
-        if (!db.objectStoreNames.contains(STORES.PROJECTS)) {
-          const projectStore = db.createObjectStore(STORES.PROJECTS, { keyPath: 'id' });
-          projectStore.createIndex('workspaceId', 'workspaceId');
-          projectStore.createIndex('name', 'name');
-          projectStore.createIndex('createdAt', 'createdAt');
-          console.log('[OpenStudio] Created projects store');
-        }
-
-        // Templates store
-        if (!db.objectStoreNames.contains(STORES.TEMPLATES)) {
-          const templateStore = db.createObjectStore(STORES.TEMPLATES, { keyPath: 'id' });
-          templateStore.createIndex('projectId', 'projectId');
-          templateStore.createIndex('createdAt', 'createdAt');
-          console.log('[OpenStudio] Created templates store');
-        }
-
-        // Recipients store
-        if (!db.objectStoreNames.contains(STORES.RECIPIENTS)) {
-          const recipientStore = db.createObjectStore(STORES.RECIPIENTS, { keyPath: 'id' });
-          recipientStore.createIndex('projectId', 'projectId');
-          recipientStore.createIndex('name', 'name');
-          console.log('[OpenStudio] Created recipients store');
-        }
-
-        // Certificates store
-        if (!db.objectStoreNames.contains(STORES.CERTIFICATES)) {
-          const certStore = db.createObjectStore(STORES.CERTIFICATES, { keyPath: 'id' });
-          certStore.createIndex('projectId', 'projectId');
-          certStore.createIndex('recipientId', 'recipientId');
-          certStore.createIndex('certificateNumber', 'certificateNumber');
-          certStore.createIndex('status', 'status');
-          console.log('[OpenStudio] Created certificates store');
-        }
-
-        // Generation jobs store
-        if (!db.objectStoreNames.contains(STORES.GENERATION_JOBS)) {
-          db.createObjectStore(STORES.GENERATION_JOBS, { keyPath: 'id' });
-          console.log('[OpenStudio] Created generation-jobs store');
-        }
+        createStore(STORES.WORKSPACES, 'id', ['createdAt']);
+        createStore(STORES.PROJECTS, 'id', ['workspaceId', 'name', 'createdAt']);
+        createStore(STORES.TEMPLATES, 'id', ['projectId', 'createdAt']);
+        createStore(STORES.RECIPIENTS, 'id', ['projectId', 'name']);
+        createStore(STORES.CERTIFICATES, 'id', ['projectId', 'recipientId', 'certificateNumber', 'status']);
+        createStore(STORES.GENERATION_JOBS, 'id', []);
       };
     });
+
+    // Race the init against the timeout
+    try {
+      await Promise.race([this.initPromise, timeoutPromise]);
+    } catch (error) {
+      this.initPromise = null;
+      throw error;
+    }
 
     return this.initPromise;
   }
@@ -201,71 +197,97 @@ class OpenStudioDB {
       await this.init();
     }
 
-    return new Promise((resolve, reject) => {
+    if (!this.db) {
+      throw new Error('[CertiForge][OpenStudio] Database not initialized');
+    }
+
+    console.log(`[CertiForge][OpenStudio] withStore START: ${storeName} (${mode})`);
+    const startTime = performance.now();
+
+    return new Promise<T>((resolve, reject) => {
       let transaction: IDBTransaction | null = null;
-      
+
       try {
-        transaction = this.db!.transaction([storeName], mode);
+        transaction = this.db.transaction([storeName], mode);
       } catch (error) {
+        const elapsed = performance.now() - startTime;
+        console.error(`[CertiForge][OpenStudio][ERROR] withStore transaction failed after ${elapsed.toFixed(0)}ms:`, error);
         reject(error);
         return;
       }
-      
+
       const store = transaction.objectStore(storeName);
-      
+
+      // Handle the callback result
       callback(store)
         .then(result => {
+          const elapsed = performance.now() - startTime;
+          console.log(`[CertiForge][OpenStudio] withStore END: ${storeName} (${elapsed.toFixed(0)}ms)`);
           resolve(result);
         })
         .catch(error => {
+          const elapsed = performance.now() - startTime;
+          console.error(`[CertiForge][OpenStudio][ERROR] withStore callback failed after ${elapsed.toFixed(0)}ms:`, error);
           reject(error);
         });
-      
+
+      // Transaction event handlers
       transaction.oncomplete = () => {
-        // Transaction completed successfully
+        // Success
       };
-      
+
       transaction.onerror = (event) => {
         const error = transaction?.error || event.target;
+        console.error(`[CertiForge][OpenStudio][ERROR] withStore transaction error:`, error);
+        reject(error);
+      };
+
+      transaction.onabort = (event) => {
+        const error = transaction?.error || new Error('Transaction aborted');
+        console.error(`[CertiForge][OpenStudio][ERROR] withStore transaction aborted:`, error);
         reject(error);
       };
     });
   }
 
-  // Workspace operations
+  // Workspace operations - MUST use readwrite for potential creation
   async getOrCreateWorkspace(): Promise<OpenStudioWorkspace> {
-    return this.withStore(STORES.WORKSPACES, 'readonly', async (store) => {
+    console.log('[CertiForge][OpenStudio] getOrCreateWorkspace START');
+    const startTime = performance.now();
+
+    // Use readwrite because we may need to create a workspace
+    const workspaces = await this.withStore(STORES.WORKSPACES, 'readwrite', async (store) => {
       const request = store.getAll();
-      return new Promise((resolve, reject) => {
-        request.onsuccess = () => {
-          const workspaces = request.result as OpenStudioWorkspace[];
-          if (workspaces.length > 0) {
-            resolve(workspaces[0]);
-          } else {
-            const workspace: OpenStudioWorkspace = {
-              id: generateId(),
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            };
-            // Create and resolve in same promise chain
-            const addRequest = store.add(workspace);
-            addRequest.onsuccess = () => resolve(workspace);
-            addRequest.onerror = () => reject(addRequest.error);
-          }
-        };
+      return new Promise<OpenStudioWorkspace[]>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result as OpenStudioWorkspace[]);
         request.onerror = () => reject(request.error);
       });
     });
-  }
 
-  async updateWorkspace(workspaceId: string, updates: Partial<OpenStudioWorkspace>): Promise<OpenStudioWorkspace> {
-    return this.withStore(STORES.WORKSPACES, 'readwrite', async (store) => {
-      const workspace = await this.getWorkspace(workspaceId);
-      if (!workspace) throw new Error('Workspace not found');
-      const updated = { ...workspace, ...updates, updatedAt: Date.now() };
-      store.put(updated);
-      return updated;
+    if (workspaces.length > 0) {
+      const elapsed = performance.now() - startTime;
+      console.log(`[CertiForge][OpenStudio] getOrCreateWorkspace END (existing, ${elapsed.toFixed(0)}ms)`);
+      return workspaces[0];
+    }
+
+    // Create new workspace - now we can write because we're in readwrite mode
+    const workspace: OpenStudioWorkspace = {
+      id: generateId(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await this.withStore(STORES.WORKSPACES, 'readwrite', async (store) => {
+      const request = store.add(workspace);
+      return new Promise<void>((resolve, reject) => {
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
     });
+
+    const elapsed = performance.now() - startTime;
+    console.log(`[CertiForge][OpenStudio] getOrCreateWorkspace END (created new, ${elapsed.toFixed(0)}ms)`);
+    return workspace;
   }
 
   async getWorkspace(workspaceId: string): Promise<OpenStudioWorkspace | null> {
@@ -460,7 +482,7 @@ class OpenStudioDB {
       id: generateId(),
       createdAt: Date.now(),
     }));
-    
+
     await this.withStore(STORES.RECIPIENTS, 'readwrite', async (store) => {
       for (const recipient of created) {
         await new Promise<void>((resolve, reject) => {
@@ -470,7 +492,7 @@ class OpenStudioDB {
         });
       }
     });
-    
+
     return created;
   }
 

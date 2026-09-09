@@ -1,7 +1,7 @@
-// Open Studio Projects Page - Premium UI
+// Open Studio Projects Page - Client-side only with robust initialization
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -15,6 +15,9 @@ interface Project {
   updatedAt: number;
 }
 
+// Safety timeout - if initialization takes > 3s, show error
+const INIT_TIMEOUT_MS = 3000;
+
 export default function StudioProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -25,94 +28,249 @@ export default function StudioProjectsPage() {
   const [saving, setSaving] = useState(false);
   const [dbReady, setDbReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initTime, setInitTime] = useState<number | null>(null);
+  
+  // Use ref to prevent stale closures and track initialization state
+  const isMounted = useRef(true);
+  const initStartedAt = useRef<number>(Date.now());
+  const dbRef = useRef<any>(null);
 
+  // Cleanup on unmount
   useEffect(() => {
-    initDb();
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
-  async function initDb() {
-    try {
-      const module = await import('@certiforge/open-studio');
-      const { openStudioDB } = module;
-      (window as any).__openStudioDB = openStudioDB;
-      await openStudioDB.init();
-      setDbReady(true);
-      await loadProjects();
-    } catch (err) {
-      console.error('Failed to initialize Open Studio DB:', err);
-      setError('Failed to initialize local storage. Please ensure IndexedDB is available.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadProjects() {
-    try {
-      const db = (window as any).__openStudioDB;
-      if (!db) return;
-      
-      const workspace = await db.getOrCreateWorkspace();
-      const projList = await db.getProjects(workspace.id);
-      
-      setProjects(projList.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        state: p.state,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      })) as Project[]);
-    } catch (err) {
-      console.error('Failed to load projects:', err);
-      setError('Failed to load projects from local storage.');
-    }
-  }
-
-  async function handleCreateProject() {
-    if (!newProjectName.trim()) return;
+  // Initialize IndexedDB on mount - with timeout safety
+  useEffect(() => {
+    initStartedAt.current = Date.now();
+    console.log('[CertiForge][Studio] mount - starting initialization');
     
+    let timeoutId: number | undefined;
+    let cancelled = false;
+
+    const initWithTimeout = async () => {
+      try {
+        // Set timeout to prevent infinite loading
+        timeoutId = window.setTimeout(() => {
+          if (!cancelled && isMounted.current) {
+            console.error('[CertiForge][Studio][ERROR] Initialization timeout - showing error state');
+            setError('Initialization timed out. Please refresh the page.');
+            setLoading(false);
+            setDbReady(false);
+          }
+        }, INIT_TIMEOUT_MS);
+
+        // Dynamic import of Open Studio
+        console.log('[CertiForge][Studio] loading open-studio package');
+        const module = await import('@certiforge/open-studio');
+        console.log('[CertiForge][Studio] open-studio package loaded');
+
+        // Verify the module has what we need
+        if (!module.default && !module.openStudioDB) {
+          throw new Error('Open Studio module missing required exports');
+        }
+
+        const { openStudioDB } = module;
+        dbRef.current = openStudioDB;
+        (window as any).__openStudioDB = openStudioDB;
+
+        console.log('[CertiForge][Studio] IndexedDB init START');
+        initStartedAt.current = Date.now();
+        await openStudioDB.init();
+        console.log('[CertiForge][Studio] IndexedDB init END');
+
+        if (!cancelled && isMounted.current) {
+          setDbReady(true);
+          const initDuration = Date.now() - initStartedAt.current;
+          setInitTime(initDuration);
+          console.log(`[CertiForge][Studio] Database ready in ${initDuration}ms`);
+          
+          // Load projects after DB is ready
+          await loadProjects();
+        }
+      } catch (err) {
+        console.error('[CertiForge][Studio][ERROR]', err);
+        if (!cancelled && isMounted.current) {
+          setError(`Failed to initialize: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+      } finally {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        if (!cancelled && isMounted.current) {
+          // Always stop loading - either success, empty state, or error
+          setLoading(false);
+        }
+      }
+    };
+
+    initWithTimeout();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  // Load projects from IndexedDB
+  const loadProjects = useCallback(async () => {
+    if (!dbRef.current || !isMounted.current) return;
+
+    try {
+      console.log('[CertiForge][Studio] projects load START');
+      const startTime = Date.now();
+      
+      const workspace = await dbRef.current.getOrCreateWorkspace();
+      console.log(`[CertiForge][Studio] workspace loaded: ${workspace.id}`);
+      
+      const projList = await dbRef.current.getProjects(workspace.id);
+      console.log(`[CertiForge][Studio] projects loaded: ${projList.length} projects`);
+      
+      if (isMounted.current) {
+        setProjects(projList.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          state: p.state,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        })));
+        const duration = Date.now() - startTime;
+        console.log(`[CertiForge][Studio] projects load END (${duration}ms)`);
+      }
+    } catch (err) {
+      console.error('[CertiForge][Studio][ERROR] Failed to load projects:', err);
+      if (isMounted.current) {
+        setError('Failed to load projects from local storage.');
+      }
+    }
+  }, []);
+
+  // Create a new project
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+
     setSaving(true);
     try {
-      const db = (window as any).__openStudioDB;
-      if (!db) {
+      if (!dbRef.current) {
         setError('Database not initialized. Please refresh the page.');
         return;
       }
+
+      console.log('[CertiForge][Studio] createProject START');
+      const startTime = Date.now();
       
-      const workspace = await db.getOrCreateWorkspace();
-      const project = await db.createProject({
+      const workspace = await dbRef.current.getOrCreateWorkspace();
+      const project = await dbRef.current.createProject({
         workspaceId: workspace.id,
         name: newProjectName,
         description: newProjectDescription || undefined,
         state: 'DRAFT',
       });
-      
+
+      console.log(`[CertiForge][Studio] createProject END (${Date.now() - startTime}ms)`);
+
       setShowCreateModal(false);
       setNewProjectName('');
       setNewProjectDescription('');
+
+      // Navigate to the new project
       router.push(`/studio/projects/${project.id}`);
     } catch (err) {
-      console.error('Failed to create project:', err);
+      console.error('[CertiForge][Studio][ERROR] Failed to create project:', err);
       setError('Failed to create project. Please try again.');
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  async function handleDeleteProject(projectId: string) {
+  // Delete a project
+  const handleDeleteProject = async (projectId: string) => {
     if (!confirm('Are you sure you want to delete this project?')) return;
-    
+
     try {
-      const db = (window as any).__openStudioDB;
-      if (!db) return;
+      if (!dbRef.current) return;
+
+      console.log('[CertiForge][Studio] deleteProject START');
+      await dbRef.current.deleteProject(projectId);
+      console.log('[CertiForge][Studio] deleteProject END');
       
-      await db.deleteProject(projectId);
+      // Refresh the project list
       await loadProjects();
-    } catch (error) {
-      console.error('Failed to delete project:', error);
+    } catch (err) {
+      console.error('[CertiForge][Studio][ERROR] Failed to delete project:', err);
     }
+  };
+
+  // Loading state - with timeout safety already built in
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(var(--background))]">
+        <div className="w-10 h-10 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
+        <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">
+          Loading workspace...
+        </p>
+      </div>
+    );
   }
 
+  // Error state - user can retry
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(var(--background))] p-4">
+        <div className="text-4xl mb-4">⚠️</div>
+        <h2 className="text-xl font-semibold mb-2 text-[hsl(var(--foreground))]">
+          Unable to Load Workspace
+        </h2>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6 max-w-md text-center">
+          {error}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="btn btn-primary"
+          >
+            Refresh Page
+          </button>
+          <Link href="/" className="btn btn-secondary">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Database not ready (shouldn't normally reach here due to timeout handling)
+  if (!dbReady) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(var(--background))] p-4">
+        <div className="text-4xl mb-4">⚠️</div>
+        <h2 className="text-xl font-semibold mb-2 text-[hsl(var(--foreground))]">
+          Storage Unavailable
+        </h2>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6 max-w-md text-center">
+          IndexedDB is not available in your browser. Open Studio requires a modern browser with local storage support.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="btn btn-primary"
+          >
+            Retry
+          </button>
+          <Link href="/" className="btn btn-secondary">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Success states
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
       {/* Header */}
@@ -148,25 +306,8 @@ export default function StudioProjectsPage() {
             {error}
           </div>
         )}
-        
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-10 h-10 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-[hsl(var(--muted-foreground))] text-sm">Loading workspace...</p>
-          </div>
-        ) : !dbReady ? (
-          <div className="text-center py-20">
-            <div className="text-4xl mb-4">⚠️</div>
-            <h2 className="text-xl font-semibold mb-2 text-[hsl(var(--foreground))]">Storage Unavailable</h2>
-            <p className="text-[hsl(var(--muted-foreground))] mb-4">IndexedDB is not available in your browser.</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="btn btn-secondary"
-            >
-              Retry
-            </button>
-          </div>
-        ) : projects.length === 0 ? (
+
+        {projects.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">📁</div>
             <h2 className="empty-state-title">No projects yet</h2>
@@ -214,12 +355,12 @@ export default function StudioProjectsPage() {
                       </svg>
                     </button>
                   </div>
-                  
+
                   <div className="flex items-center gap-4 text-xs text-[hsl(var(--muted-foreground))] mb-4">
                     <span className="badge badge-success">{project.state.toLowerCase()}</span>
                     <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
                   </div>
-                  
+
                   <Link
                     href={`/studio/projects/${project.id}`}
                     className="block w-full py-2 rounded-lg text-center text-sm font-medium btn btn-secondary"
@@ -254,7 +395,7 @@ export default function StudioProjectsPage() {
                 <h2 className="text-xl font-semibold mb-6 text-[hsl(var(--foreground))]">
                   Create New Project
                 </h2>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="form-label">
@@ -269,7 +410,7 @@ export default function StudioProjectsPage() {
                       autoFocus
                     />
                   </div>
-                  
+
                   <div>
                     <label className="form-label">
                       Description (optional)
@@ -283,7 +424,7 @@ export default function StudioProjectsPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setShowCreateModal(false)}

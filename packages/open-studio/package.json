@@ -2,12 +2,13 @@
   "name": "@certiforge/open-studio",
   "version": "1.0.0",
   "private": true,
-  "main": "./src/db.ts",
-  "types": "./src/db.ts",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "import": "./src/db.ts",
-      "types": "./src/db.ts"
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
     }
   },
   "scripts": {
