@@ -1,450 +1,298 @@
-// Open Studio Projects Page - Client-side only with robust initialization
+// Minimal Open Studio Projects Page
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  state: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-// Safety timeout - if initialization takes > 3s, show error
-const INIT_TIMEOUT_MS = 3000;
+const DB_NAME = 'certiforge-studio';
 
 export default function StudioProjectsPage() {
   const router = useRouter();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectDescription, setNewProjectDescription] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [dbReady, setDbReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initTime, setInitTime] = useState<number | null>(null);
-  
-  // Use ref to prevent stale closures and track initialization state
-  const isMounted = useRef(true);
-  const initStartedAt = useRef<number>(Date.now());
-  const dbRef = useRef<any>(null);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  // Initialize IndexedDB on mount - with timeout safety
-  useEffect(() => {
-    initStartedAt.current = Date.now();
-    console.log('[CertiForge][Studio] mount - starting initialization');
-    
-    let timeoutId: number | undefined;
-    let cancelled = false;
-
-    const initWithTimeout = async () => {
-      try {
-        // Set timeout to prevent infinite loading
-        timeoutId = window.setTimeout(() => {
-          if (!cancelled && isMounted.current) {
-            console.error('[CertiForge][Studio][ERROR] Initialization timeout - showing error state');
-            setError('Initialization timed out. Please refresh the page.');
-            setLoading(false);
-            setDbReady(false);
-          }
-        }, INIT_TIMEOUT_MS);
-
-        // Dynamic import of Open Studio
-        console.log('[CertiForge][Studio] loading open-studio package');
-        const module = await import('@certiforge/open-studio');
-        console.log('[CertiForge][Studio] open-studio package loaded');
-
-        // Verify the module has what we need
-        if (!module.default && !module.openStudioDB) {
-          throw new Error('Open Studio module missing required exports');
-        }
-
-        const { openStudioDB } = module;
-        dbRef.current = openStudioDB;
-        (window as any).__openStudioDB = openStudioDB;
-
-        console.log('[CertiForge][Studio] IndexedDB init START');
-        initStartedAt.current = Date.now();
-        await openStudioDB.init();
-        console.log('[CertiForge][Studio] IndexedDB init END');
-
-        if (!cancelled && isMounted.current) {
-          setDbReady(true);
-          const initDuration = Date.now() - initStartedAt.current;
-          setInitTime(initDuration);
-          console.log(`[CertiForge][Studio] Database ready in ${initDuration}ms`);
-          
-          // Load projects after DB is ready
-          await loadProjects();
-        }
-      } catch (err) {
-        console.error('[CertiForge][Studio][ERROR]', err);
-        if (!cancelled && isMounted.current) {
-          setError(`Failed to initialize: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
-      } finally {
-        if (timeoutId) {
-          window.clearTimeout(timeoutId);
-        }
-        if (!cancelled && isMounted.current) {
-          // Always stop loading - either success, empty state, or error
-          setLoading(false);
-        }
-      }
-    };
-
-    initWithTimeout();
-
-    return () => {
-      cancelled = true;
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, []);
+  const [showModal, setShowModal] = useState(false);
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
 
   // Load projects from IndexedDB
-  const loadProjects = useCallback(async () => {
-    if (!dbRef.current || !isMounted.current) return;
-
-    try {
-      console.log('[CertiForge][Studio] projects load START');
-      const startTime = Date.now();
-      
-      const workspace = await dbRef.current.getOrCreateWorkspace();
-      console.log(`[CertiForge][Studio] workspace loaded: ${workspace.id}`);
-      
-      const projList = await dbRef.current.getProjects(workspace.id);
-      console.log(`[CertiForge][Studio] projects loaded: ${projList.length} projects`);
-      
-      if (isMounted.current) {
-        setProjects(projList.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          state: p.state,
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
-        })));
-        const duration = Date.now() - startTime;
-        console.log(`[CertiForge][Studio] projects load END (${duration}ms)`);
-      }
-    } catch (err) {
-      console.error('[CertiForge][Studio][ERROR] Failed to load projects:', err);
-      if (isMounted.current) {
-        setError('Failed to load projects from local storage.');
-      }
+  useEffect(() => {
+    console.log('[Studio] Loading...');
+    
+    if (typeof indexedDB === 'undefined') {
+      setError('IndexedDB not supported');
+      setLoading(false);
+      return;
     }
-  }, []);
 
-  // Create a new project
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim()) return;
-
-    setSaving(true);
-    try {
-      if (!dbRef.current) {
-        setError('Database not initialized. Please refresh the page.');
-        return;
+    const timeout = setTimeout(() => {
+      if (loading) {
+        setError('Timeout - please refresh');
+        setLoading(false);
       }
+    }, 3000);
 
-      console.log('[CertiForge][Studio] createProject START');
-      const startTime = Date.now();
-      
-      const workspace = await dbRef.current.getOrCreateWorkspace();
-      const project = await dbRef.current.createProject({
-        workspaceId: workspace.id,
-        name: newProjectName,
-        description: newProjectDescription || undefined,
-        state: 'DRAFT',
-      });
+    const load = () => {
+      try {
+        const request = indexedDB.open(DB_NAME, 1);
 
-      console.log(`[CertiForge][Studio] createProject END (${Date.now() - startTime}ms)`);
+        request.onupgradeneeded = (e) => {
+          const db = (e.target as IDBOpenDBRequest).result;
+          if (!db.objectStoreNames.contains('projects')) {
+            db.createObjectStore('projects', { keyPath: 'id' });
+          }
+        };
 
-      setShowCreateModal(false);
-      setNewProjectName('');
-      setNewProjectDescription('');
+        request.onsuccess = (e) => {
+          const db = (e.target as IDBOpenDBRequest).result;
+          
+          const tx = db.transaction('projects', 'readonly');
+          const store = tx.objectStore('projects');
+          const getAll = store.getAll();
 
-      // Navigate to the new project
-      router.push(`/studio/projects/${project.id}`);
+          getAll.onsuccess = () => {
+            console.log('[Studio] Loaded:', getAll.result?.length || 0, 'projects');
+            setProjects(getAll.result || []);
+            setLoading(false);
+            db.close();
+          };
+
+          getAll.onerror = () => {
+            setError('Failed to load projects');
+            setLoading(false);
+            db.close();
+          };
+        };
+
+        request.onerror = () => {
+          setError('Failed to open database');
+          setLoading(false);
+        };
+      } catch (err) {
+        console.error('[Studio] Error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to initialize');
+        setLoading(false);
+      }
+    };
+
+    load();
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
+
+  const createProject = async () => {
+    if (!name.trim()) return;
+
+    setCreating(true);
+    
+    try {
+      if (typeof indexedDB === 'undefined') return;
+
+      const request = indexedDB.open(DB_NAME, 1);
+
+      request.onupgradeneeded = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains('projects')) {
+          db.createObjectStore('projects', { keyPath: 'id' });
+        }
+      };
+
+      request.onsuccess = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        
+        const tx = db.transaction('projects', 'readwrite');
+        const store = tx.objectStore('projects');
+        
+        const newProject = {
+          id: crypto.randomUUID(),
+          name: name.trim(),
+          description: '',
+          state: 'DRAFT',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        const addRequest = store.add(newProject);
+
+        addRequest.onsuccess = () => {
+          console.log('[Studio] Created project:', newProject.id);
+          setShowModal(false);
+          setName('');
+          router.push(`/studio/projects/${newProject.id}`);
+          db.close();
+        };
+
+        addRequest.onerror = () => {
+          setError('Failed to create project');
+          db.close();
+        };
+      };
+
+      request.onerror = () => {
+        setError('Failed to open database');
+        console.error('[Studio] Database error:', request.error);
+      };
     } catch (err) {
-      console.error('[CertiForge][Studio][ERROR] Failed to create project:', err);
-      setError('Failed to create project. Please try again.');
+      console.error('[Studio] Create error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create');
     } finally {
-      setSaving(false);
+      setCreating(false);
     }
   };
 
-  // Delete a project
-  const handleDeleteProject = async (projectId: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) return;
+  const deleteProject = async (id: string) => {
+    if (!confirm('Delete this project?')) return;
 
     try {
-      if (!dbRef.current) return;
+      if (typeof indexedDB === 'undefined') return;
 
-      console.log('[CertiForge][Studio] deleteProject START');
-      await dbRef.current.deleteProject(projectId);
-      console.log('[CertiForge][Studio] deleteProject END');
-      
-      // Refresh the project list
-      await loadProjects();
+      const request = indexedDB.open(DB_NAME, 1);
+
+      request.onsuccess = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        
+        const tx = db.transaction('projects', 'readwrite');
+        const store = tx.objectStore('projects');
+        const deleteRequest = store.delete(id);
+
+        deleteRequest.onsuccess = () => {
+          setProjects(prev => prev.filter(p => p.id !== id));
+          console.log('[Studio] Deleted project:', id);
+          db.close();
+        };
+
+        deleteRequest.onerror = () => {
+          setError('Failed to delete project');
+          db.close();
+        };
+      };
+
+      request.onerror = () => {
+        setError('Database error');
+      };
     } catch (err) {
-      console.error('[CertiForge][Studio][ERROR] Failed to delete project:', err);
+      console.error('[Studio] Delete error:', err);
     }
   };
 
-  // Loading state - with timeout safety already built in
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(var(--background))]">
-        <div className="w-10 h-10 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
-        <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">
-          Loading workspace...
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[hsl(var(--muted-foreground))]">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  // Error state - user can retry
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(var(--background))] p-4">
-        <div className="text-4xl mb-4">⚠️</div>
-        <h2 className="text-xl font-semibold mb-2 text-[hsl(var(--foreground))]">
-          Unable to Load Workspace
-        </h2>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6 max-w-md text-center">
-          {error}
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => window.location.reload()}
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))] p-4">
+        <div className="text-center max-w-md">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-lg font-semibold mb-2">Error</h2>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
             className="btn btn-primary"
           >
-            Refresh Page
+            Reload
           </button>
-          <Link href="/" className="btn btn-secondary">
-            Back to Home
-          </Link>
         </div>
       </div>
     );
   }
 
-  // Database not ready (shouldn't normally reach here due to timeout handling)
-  if (!dbReady) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[hsl(var(--background))] p-4">
-        <div className="text-4xl mb-4">⚠️</div>
-        <h2 className="text-xl font-semibold mb-2 text-[hsl(var(--foreground))]">
-          Storage Unavailable
-        </h2>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6 max-w-md text-center">
-          IndexedDB is not available in your browser. Open Studio requires a modern browser with local storage support.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => window.location.reload()}
-            className="btn btn-primary"
-          >
-            Retry
-          </button>
-          <Link href="/" className="btn btn-secondary">
-            Back to Home
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Success states
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
-      {/* Header */}
-      <header className="border-b border-[hsl(var(--border))] glass sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <header className="border-b border-[hsl(var(--border))]">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
           <div>
-            <Link href="/studio" className="text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
-              ← Back to Studio
+            <Link href="/studio" className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+              ← Back
             </Link>
-            <h1 className="text-2xl font-bold mt-1 text-[hsl(var(--foreground))]">
-              My Projects
-            </h1>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              Data stored locally in your browser
-            </p>
+            <h1 className="text-xl font-semibold mt-1">My Projects</h1>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn btn-primary gap-2"
+          <button 
+            onClick={() => setShowModal(true)}
+            className="btn btn-primary"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            New Project
+            + New Project
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
-          <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-sm">
-            {error}
-          </div>
-        )}
-
+      <main className="max-w-6xl mx-auto px-6 py-8">
         {projects.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">📁</div>
-            <h2 className="empty-state-title">No projects yet</h2>
-            <p className="empty-state-description">
-              Create your first project to start generating professional certificates
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn btn-primary mt-6"
-            >
-              Create First Project
+          <div className="text-center py-20">
+            <div className="text-5xl mb-4">📁</div>
+            <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
+            <p className="text-[hsl(var(--muted-foreground))] mb-6">Create your first project to start designing certificates</p>
+            <button onClick={() => setShowModal(true)} className="btn btn-primary">
+              Create Project
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {projects.map((project) => (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="card card-interactive group"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-[hsl(var(--foreground))]">
-                        {project.name}
-                      </h3>
-                      {project.description && (
-                        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 line-clamp-2">
-                          {project.description}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDeleteProject(project.id)}
-                      className="ml-4 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
-                      style={{ color: 'hsl(var(--destructive))' }}
-                      title="Delete project"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-xs text-[hsl(var(--muted-foreground))] mb-4">
-                    <span className="badge badge-success">{project.state.toLowerCase()}</span>
-                    <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
-                  </div>
-
-                  <Link
-                    href={`/studio/projects/${project.id}`}
-                    className="block w-full py-2 rounded-lg text-center text-sm font-medium btn btn-secondary"
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((project) => (
+              <div key={project.id} className="card card-interactive">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-medium">{project.name}</h3>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }}
+                    className="text-xs text-destructive hover:underline"
                   >
-                    Open Project
-                  </Link>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                    Delete
+                  </button>
+                </div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
+                  {new Date(project.createdAt).toLocaleDateString()}
+                </div>
+                <Link
+                  href={`/studio/projects/${project.id}`}
+                  className="block w-full py-2 rounded text-center text-sm btn btn-secondary"
+                >
+                  Open
+                </Link>
+              </div>
+            ))}
           </div>
         )}
       </main>
 
-      {/* Create Modal */}
-      <AnimatePresence>
-        {showCreateModal && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-              onClick={() => setShowCreateModal(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed inset-0 flex items-center justify-center z-50 p-4"
-            >
-              <div className="card w-full max-w-md">
-                <h2 className="text-xl font-semibold mb-6 text-[hsl(var(--foreground))]">
-                  Create New Project
-                </h2>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="form-label">
-                      Project Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={newProjectName}
-                      onChange={(e) => setNewProjectName(e.target.value)}
-                      placeholder="e.g., Community Training 2026"
-                      className="form-input"
-                      autoFocus
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label">
-                      Description (optional)
-                    </label>
-                    <textarea
-                      value={newProjectDescription}
-                      onChange={(e) => setNewProjectDescription(e.target.value)}
-                      placeholder="Brief description of this project..."
-                      rows={3}
-                      className="form-input resize-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="btn btn-secondary flex-1"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateProject}
-                    disabled={saving || !newProjectName.trim()}
-                    className="btn btn-primary flex-1 disabled:opacity-50"
-                  >
-                    {saving ? 'Creating...' : 'Create Project'}
-                  </button>
-                </div>
+      {showModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowModal(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="card w-full max-w-md">
+              <h2 className="text-lg font-semibold mb-4">New Project</h2>
+              <input
+                type="text"
+                placeholder="Project name..."
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="form-input mb-4"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && createProject()}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setShowModal(false)} className="btn btn-secondary flex-1">
+                  Cancel
+                </button>
+                <button 
+                  onClick={createProject} 
+                  disabled={creating || !name.trim()}
+                  className="btn btn-primary flex-1 disabled:opacity-50"
+                >
+                  {creating ? 'Creating...' : 'Create'}
+                </button>
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
