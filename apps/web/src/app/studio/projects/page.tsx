@@ -87,7 +87,10 @@ export default function StudioProjectsPage() {
     setCreating(true);
     
     try {
-      if (typeof indexedDB === 'undefined') return;
+      if (typeof indexedDB === 'undefined') {
+        setError('IndexedDB not available');
+        return;
+      }
 
       const request = indexedDB.open(DB_NAME, 1);
 
@@ -98,7 +101,7 @@ export default function StudioProjectsPage() {
         }
       };
 
-      request.onsuccess = (e) => {
+      request.onsuccess = async (e) => {
         const db = (e.target as IDBOpenDBRequest).result;
         
         const tx = db.transaction('projects', 'readwrite');
@@ -117,26 +120,38 @@ export default function StudioProjectsPage() {
 
         addRequest.onsuccess = () => {
           console.log('[Studio] Created project:', newProject.id);
+          
+          // Close db immediately
+          db.close();
+          
+          // Update local state first
+          setProjects(prev => [...prev, newProject]);
           setShowModal(false);
           setName('');
-          router.push(`/studio/projects/${newProject.id}`);
-          db.close();
+          setCreating(false);
+          
+          // Then navigate
+          setTimeout(() => {
+            router.push(`/studio/projects/${newProject.id}`);
+          }, 100);
         };
 
         addRequest.onerror = () => {
+          console.error('[Studio] Failed to add project:', addRequest.error);
           setError('Failed to create project');
+          setCreating(false);
           db.close();
         };
       };
 
       request.onerror = () => {
-        setError('Failed to open database');
         console.error('[Studio] Database error:', request.error);
+        setError('Failed to open database');
+        setCreating(false);
       };
     } catch (err) {
       console.error('[Studio] Create error:', err);
       setError(err instanceof Error ? err.message : 'Failed to create');
-    } finally {
       setCreating(false);
     }
   };
@@ -264,9 +279,13 @@ export default function StudioProjectsPage() {
 
       {showModal && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowModal(false)} />
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-            <div className="card w-full max-w-md">
+          <div 
+            className="fixed inset-0 bg-black/50 z-40" 
+            onClick={() => setShowModal(false)}
+            style={{ pointerEvents: 'auto' }}
+          />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ pointerEvents: 'auto' }}>
+            <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()} style={{ pointerEvents: 'auto' }}>
               <h2 className="text-lg font-semibold mb-4">New Project</h2>
               <input
                 type="text"
@@ -276,15 +295,21 @@ export default function StudioProjectsPage() {
                 className="form-input mb-4"
                 autoFocus
                 onKeyDown={(e) => e.key === 'Enter' && createProject()}
+                style={{ pointerEvents: 'auto' }}
               />
               <div className="flex gap-2">
-                <button onClick={() => setShowModal(false)} className="btn btn-secondary flex-1">
+                <button 
+                  onClick={() => setShowModal(false)} 
+                  className="btn btn-secondary flex-1"
+                  style={{ pointerEvents: 'auto' }}
+                >
                   Cancel
                 </button>
                 <button 
                   onClick={createProject} 
                   disabled={creating || !name.trim()}
                   className="btn btn-primary flex-1 disabled:opacity-50"
+                  style={{ pointerEvents: 'auto' }}
                 >
                   {creating ? 'Creating...' : 'Create'}
                 </button>
