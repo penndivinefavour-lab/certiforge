@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-09-22T04:46:10.117Z",
+  "results": [
+    {
+      "step": "Create Project",
+      "pass": true,
+      "time_ms": 7287
+    },
+    {
+      "step": "Project Detail Load",
+      "pass": true,
+      "url": "http://localhost:3002/studio/projects/abba5319-fd85-41e5-880f-81c1e02725a7",
+      "time_ms": 3117
+    },
+    {
+      "step": "Template Section",
+      "pass": true,
+      "time_ms": 105
+    },
+    {
+      "step": "Editor Access",
+      "pass": true,
+      "time_ms": 3389
+    },
+    {
+      "step": "Recipients Section",
+      "pass": true,
+      "csv_import": false,
+      "time_ms": 2100
+    },
+    {
+      "step": "Generate Section",
+      "pass": false,
+      "time_ms": 4177
+    },
+    {
+      "step": "Verification Route",
+      "pass": true,
+      "time_ms": 3341
+    }
+  ],
+  "console_errors": 2,
+  "screenshots": [
+    "00-project-created.png",
+    "01-project-created.png",
+    "01-project-detail.png",
+    "02-project-detail.png",
+    "02-project-navigation.png",
+    "03-templates-tab.png",
+    "04-editor.png",
+    "05-recipients.png",
+    "06-generate.png",
+    "07-verification-page.png",
+    "07-verification.png",
+    "error-state.png"
+  ]
+}
