@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { studioService } from '@/lib/studio-service';
 
 export default function StudioRecipientsPage() {
   const params = useParams();
@@ -82,15 +83,11 @@ export default function StudioRecipientsPage() {
         },
       })).filter(r => r.name);
       
-      const res = await fetch(`/api/studio/projects/${projectId}/recipients`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipients }),
-      });
+      // Store recipients in IndexedDB
+      const created = await studioService.bulkCreateRecipients(recipients.map(r => ({ projectId, ...r })));
       
-      const data = await res.json();
-      if (data.recipients) {
-        setImported(data.recipients.length);
+      if (created.length > 0) {
+        setImported(created.length);
         setStep('import');
       }
     } catch (error) {

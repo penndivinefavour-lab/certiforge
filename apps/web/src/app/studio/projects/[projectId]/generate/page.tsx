@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import JSZip from 'jszip';
+import { studioService } from '@/lib/studio-service';
+import type { Template, Recipient, Certificate } from '@/lib/studio-service';
+import { renderCertificate, generateCertificateId, generateVerificationToken } from '@certiforge/certificate-engine';
+import { generateQRCode } from '@certiforge/qr';
 
 export default function StudioGeneratePage() {
   const params = useParams();
@@ -11,61 +15,150 @@ export default function StudioGeneratePage() {
   const projectId = params.projectId as string;
   
   const [step, setStep] = useState<'select' | 'generating' | 'download'>('select');
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [recipients, setRecipients] = useState<any[]>([]);
-  const [generated, setGenerated] = useState<any[]>([]);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [generated, setGenerated] = useState<Certificate[]>([]);
   const [downloading, setDownloading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchProjectData();
+    fetchData();
   }, [projectId]);
 
-  const fetchProjectData = async () => {
+  const fetchData = async () => {
     try {
-      const res = await fetch(`/api/studio/projects/${projectId}`);
-      const data = await res.json();
-      if (data.project) {
-        setTemplates(data.project.templates || []);
-      }
+      setLoading(true);
+      const [project, templatesData, recipientsData] = await Promise.all([
+        studioService.getProject(projectId),
+        studioService.getTemplates(projectId),
+        studioService.getRecipients(projectId),
+      ]);
       
-      const recsRes = await fetch(`/api/studio/projects/${projectId}/recipients`);
-      const recsData = await recsRes.json();
-      if (recsData.recipients) {
-        setRecipients(recsData.recipients);
+      if (project) {
+        setTemplates(templatesData);
       }
+      setRecipients(recipientsData);
     } catch (error) {
       console.error('Failed to fetch project data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGenerate = async () => {
-    if (!selectedTemplate) return;
+    if (!selectedTemplate || recipients.length === 0) return;
     
     setStep('generating');
     
     try {
-      const res = await fetch(`/api/studio/projects/${projectId}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateId: selectedTemplate,
-          recipients: recipients.map(r => ({
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            metadata: r.metadata || {},
-          })),
-        }),
-      });
-      
-      const data = await res.json();
-      if (data.certificates) {
-        setGenerated(data.certificates);
+      const template = templates.find(t => t.id === selectedTemplate);
+      if (!template) {
+        throw new Error('Template not found');
+      }
+
+      const certificates: Certificate[] = [];
+      const errors: any[] = [];
+
+      for (const recipient of recipients) {
+        try {
+          // Generate certificate ID
+          const certificateId = generateCertificateId();
+          const certificateNumber = `CF-${certificateId.slice(0, 4)}-${certificateId.slice(4, 8)}-${certificateId.slice(8, 12)}`;
+          const verificationToken = generateVerificationToken();
+
+          // Prepare dynamic values
+          const dynamicValues: Record<string, string> = {
+            recipient_name: recipient.name,
+            course_name: recipient.metadata?.course_name || '',
+            issue_date: new Date().toLocaleDateString(),
+            certificate_id: certificateNumber,
+            instructor: recipient.metadata?.instructor || '',
+            organization: recipient.metadata?.organization || '',
+            duration: recipient.metadata?.duration || '',
+            grade: recipient.metadata?.grade || '',
+            ...recipient.metadata,
+          };
+
+          const appUrl = typeof window !== 'undefined'
+            ? `${window.location.protocol}//${window.location.host}`
+            : 'http://localhost:3000';
+          const qrDataUrl = await generateQRCode(`${appUrl}/verify/${certificateNumber}`, 256);
+
+          // Generate PDF
+          const doc = await renderCertificate(
+            {
+              id: template.id,
+              name: template.name,
+              templateId: template.id,
+              version: 1,
+              width: template.width || 1000,
+              height: template.height || 700,
+              backgroundColor: template.backgroundColor || '#ffffff',
+              orientation: template.orientation === 'landscape' ? 'landscape' : 'portrait',
+              elements: JSON.stringify(template.elements || []),
+              createdAt: new Date(template.createdAt),
+              background: null,
+              updatedAt: new Date(template.updatedAt),
+            } as any,
+            {
+              id: certificateId,
+              projectId,
+              recipientId: recipient.id,
+              templateVersionId: template.id,
+              certificateNumber,
+              verificationToken,
+              status: 'GENERATED',
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              issuedAt: null,
+              revokedAt: null,
+              revocationReason: null,
+              pdfUrl: null,
+              qrUrl: null,
+              qrDataUrl: qrDataUrl,
+              metadata: JSON.stringify(dynamicValues),
+            } as any,
+            {
+              id: recipient.id,
+              name: recipient.name,
+              email: recipient.email,
+              metadata: JSON.stringify(recipient.metadata || {}),
+            } as any,
+            dynamicValues
+          );
+
+          // Save certificate to IndexedDB
+          const cert = await studioService.createCertificate({
+            projectId,
+            recipientId: recipient.id,
+            templateId: template.id,
+            certificateNumber,
+            recipientName: recipient.name,
+            recipientEmail: recipient.email,
+            verificationToken,
+            status: 'GENERATED',
+            pdfData: doc.pdfBytes ? `data:application/pdf;base64,${btoa(String.fromCharCode(...Array.from(doc.pdfBytes)))}` : undefined,
+            qrCodeUrl: String(qrDataUrl),
+          });
+
+          certificates.push(cert);
+        } catch (err) {
+          console.error(`Failed to generate certificate for ${recipient.name}:`, err);
+          errors.push({ recipientId: recipient.id, error: err instanceof Error ? err.message : 'Unknown error' });
+        }
+      }
+
+      if (certificates.length > 0) {
+        setGenerated(certificates);
         setStep('download');
+      } else if (errors.length > 0) {
+        throw new Error(`Failed to generate any certificates: ${errors.length} errors`);
       }
     } catch (error) {
       console.error('Generation failed:', error);
+      alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setStep('select');
     }
   };
 
@@ -102,6 +195,17 @@ export default function StudioGeneratePage() {
       setDownloading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
+        <div className="text-center">
+          <div className="animate-spin w-16 h-16 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <h2 className="text-xl font-semibold" style={{ color: 'var(--foreground)' }}>Loading...</h2>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'select') {
     return (
