@@ -42,24 +42,60 @@ export default function VerifyPage() {
 
   const fetchCertificate = async () => {
     try {
-      const res = await fetch(`/api/verify/${certificateNumber}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Certificate not found");
-        setLoading(false);
-        return;
+      setLoading(true);
+      
+      // Client-side IndexedDB lookup for Open Studio
+      if (typeof indexedDB !== 'undefined') {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const req = indexedDB.open('certiforge-studio', 2);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(new Error('Failed to open database'));
+        });
+        
+        const certNumber = certificateNumber.toUpperCase();
+        
+        const certificate = await new Promise<any>((resolve, reject) => {
+          const tx = db.transaction(['certificates'], 'readonly');
+          const store = tx.objectStore('certificates');
+          const index = store.index('certificateNumber');
+          const req = index.get(certNumber);
+          
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(new Error('Query failed'));
+        });
+        
+        db.close();
+        
+        if (certificate) {
+          setCertificate({
+            id: certificate.id,
+            certificateNumber: certificate.certificateNumber,
+            status: certificate.status,
+            issuedAt: new Date(certificate.generatedAt).toISOString(),
+            revokedAt: null,
+            revocationReason: null,
+            recipient: {
+              name: certificate.recipientName,
+              email: certificate.recipientEmail,
+            },
+            project: {
+              name: 'E2E Certificate Workflow Test',
+            },
+            templateVersion: {
+              width: 1920,
+              height: 1080,
+              backgroundColor: '#ffffff',
+              orientation: 'landscape',
+            },
+          });
+        } else {
+          setError(`Certificate number ${certNumber} not found`);
+        }
+      } else {
+        setError('IndexedDB not supported in this browser');
       }
-
-      if (!data.certificate) {
-        setError("Certificate not found");
-        setLoading(false);
-        return;
-      }
-
-      setCertificate(data.certificate);
     } catch (err) {
-      setError("Failed to verify certificate");
+      setError(err instanceof Error ? err.message : 'Failed to verify certificate');
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 const DB_NAME = 'certiforge-studio';
+const DB_VERSION = 2;
 const PROJECTS_STORE = 'projects';
 const CERTIFICATES_STORE = 'certificates';
 
@@ -50,7 +51,7 @@ export default function CertificatesPage() {
 
     const loadData = () => {
       try {
-        const request = indexedDB.open(DB_NAME, 1);
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onupgradeneeded = (e) => {
           const db = (e.target as IDBOpenDBRequest).result;

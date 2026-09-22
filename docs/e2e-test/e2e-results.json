@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-09-22T06:44:45.047Z",
+  "results": [
+    {
+      "step": "Create Project",
+      "pass": true,
+      "projectId": "39ed017e-32ea-4056-98fa-6560b0530189"
+    },
+    {
+      "step": "Add Recipients",
+      "pass": false
+    },
+    {
+      "step": "Access Editor",
+      "pass": true,
+      "url": "http://localhost:3002/studio/projects/39ed017e-32ea-4056-98fa-6560b0530189/editor"
+    },
+    {
+      "step": "Generate Certificates",
+      "pass": false,
+      "error": "Failed to generate certificates"
+    },
+    {
+      "step": "View Certificates",
+      "pass": false
+    },
+    {
+      "step": "Download PDF",
+      "pass": false,
+      "note": "No certificates"
+    },
+    {
+      "step": "Download ZIP",
+      "pass": false,
+      "note": "No button"
+    },
+    {
+      "step": "Verify Certificate",
+      "pass": true,
+      "certificateId": "TEST-CERT-001"
+    }
+  ],
+  "console_errors": 1,
+  "overall_pass": false,
+  "screenshots": [
+    "01-project.png",
+    "02-recipients.png",
+    "02-template.png",
+    "03-editor.png",
+    "04-fields-added.png",
+    "04-generate.png",
+    "05-certificates.png",
+    "05-template-saved.png",
+    "06-pdf-download.png",
+    "06-recipients.png",
+    "07-generate.png",
+    "07-zip.png",
+    "08-certificates-list.png",
+    "08-verification.png",
+    "09-pdf-download.png",
+    "10-zip-download.png",
+    "11-verification.png",
+    "error-state.png"
+  ]
+}

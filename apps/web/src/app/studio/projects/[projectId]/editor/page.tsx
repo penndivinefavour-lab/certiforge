@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import * as fabric from 'fabric';
 import { motion } from 'framer-motion';
+import { studioService } from '@/lib/studio-service';
 
 export default function StudioEditorPage() {
   const params = useParams();
@@ -36,33 +37,28 @@ export default function StudioEditorPage() {
 
   const handleSaveTemplate = async () => {
     if (!canvas) return;
-    
+
     setSaving(true);
     setSaveStatus('saving');
-    
+
     try {
       // Serialize canvas to JSON
       const json = canvas.toJSON();
-      
-      // Save to backend
-      const res = await fetch(`/api/studio/projects/${projectId}/templates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Certificate Template',
-          orientation: 'landscape',
-          width: json.width,
-          height: json.height,
-          elements: json.objects,
-          backgroundColor: json.background,
-        }),
+
+      // Save directly to IndexedDB via studioService
+      const template = await studioService.createTemplate({
+        projectId,
+        name: 'Certificate Template',
+        width: json.width || 842,
+        height: json.height || 595,
+        orientation: 'landscape',
+        backgroundColor: json.background || '#ffffff',
+        elements: json.objects || [],
       });
-      
-      const data = await res.json();
-      if (data.template) {
-        setTemplateId(data.template.id);
-        setSaveStatus('saved');
-      }
+
+      setTemplateId(template.id);
+      setSaveStatus('saved');
+      console.log('[Editor] Template saved:', template.id);
     } catch (error) {
       console.error('Failed to save template:', error);
       setSaveStatus('error');

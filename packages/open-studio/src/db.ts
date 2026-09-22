@@ -1,8 +1,8 @@
 // Open Studio IndexedDB Storage Layer
 /// <reference lib="dom" />
 
-const DB_NAME = 'certiforge-open-studio';
-const DB_VERSION = 1;
+const DB_NAME = 'certiforge-studio';
+const DB_VERSION = 2;
 
 const STORES = {
   WORKSPACES: 'workspaces',
@@ -125,7 +125,9 @@ class OpenStudioDB {
           db.createObjectStore(STORES.RECIPIENTS, { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains(STORES.CERTIFICATES)) {
-          db.createObjectStore(STORES.CERTIFICATES, { keyPath: 'id' });
+          const certStore = db.createObjectStore(STORES.CERTIFICATES, { keyPath: 'id' });
+          certStore.createIndex('certificateNumber', 'certificateNumber', { unique: true });
+          certStore.createIndex('projectId', 'projectId', { unique: false });
         }
         // Create generation_jobs store if it doesn't exist
         if (!db.objectStoreNames.contains('generation_jobs')) {

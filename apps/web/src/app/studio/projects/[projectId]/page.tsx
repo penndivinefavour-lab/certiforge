@@ -32,7 +32,7 @@ export default function StudioProjectPage() {
 
   useEffect(() => {
     console.log('[ProjectDetail] Loading project:', projectId);
-    
+
     if (typeof indexedDB === 'undefined') {
       setError('IndexedDB not supported');
       setLoading(false);
@@ -46,47 +46,96 @@ export default function StudioProjectPage() {
       }
     }, 5000);
 
-    const loadProject = () => {
+    const loadProject = async () => {
       try {
-        const request = indexedDB.open(DB_NAME, 1);
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, 2);
 
-        request.onupgradeneeded = (e) => {
-          const db = (e.target as IDBOpenDBRequest).result;
-          if (!db.objectStoreNames.contains(PROJECTS_STORE)) {
-            db.createObjectStore(PROJECTS_STORE, { keyPath: 'id' });
+          request.onupgradeneeded = (e) => {
+            const db = (e.target as IDBOpenDBRequest).result;
+            // Ensure all stores exist
+            ['projects', 'templates', 'recipients', 'certificates'].forEach(storeName => {
+              if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName, { keyPath: 'id' });
+              }
+            });
+          };
+
+          request.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
+          request.onerror = () => reject(request.error);
+        });
+
+        // Load project
+        const tx = db.transaction(PROJECTS_STORE, 'readonly');
+        const store = tx.objectStore(PROJECTS_STORE);
+        const getRequest = store.get(projectId);
+
+        getRequest.onsuccess = async () => {
+          const data = getRequest.result;
+
+          if (!data) {
+            setError('Project not found');
+            setLoading(false);
+            db.close();
+            return;
           }
-        };
 
-        request.onsuccess = (e) => {
-          const db = (e.target as IDBOpenDBRequest).result;
-          
-          const tx = db.transaction(PROJECTS_STORE, 'readonly');
-          const store = tx.objectStore(PROJECTS_STORE);
-          const getRequest = store.get(projectId);
+          // Load related data from separate stores
+          const templatesTx = db.transaction('templates', 'readonly');
+          const templatesStore = templatesTx.objectStore('templates');
+          const templatesReq = templatesStore.getAll();
 
-          getRequest.onsuccess = () => {
-            const data = getRequest.result;
-            console.log('[ProjectDetail] Found project:', data?.name || 'not found');
-            
-            if (data) {
-              setProject(data as Project);
-            } else {
-              setError('Project not found');
-            }
-            setLoading(false);
-            db.close();
-          };
+          const recipientsTx = db.transaction('recipients', 'readonly');
+          const recipientsStore = recipientsTx.objectStore('recipients');
+          const recipientsReq = recipientsStore.getAll();
 
-          getRequest.onerror = () => {
-            setError('Failed to load project');
-            setLoading(false);
-            db.close();
-          };
-        };
+          const certificatesTx = db.transaction('certificates', 'readonly');
+          const certificatesStore = certificatesTx.objectStore('certificates');
+          const certificatesReq = certificatesStore.getAll();
 
-        request.onerror = () => {
-          setError('Failed to open database');
+          await Promise.all([
+            new Promise<void>((resolve) => {
+              templatesReq.onsuccess = () => {
+                (data as any).templates = (templatesReq.result || []).filter((t: any) => t.projectId === projectId);
+                resolve();
+              };
+              templatesReq.onerror = () => {
+                (data as any).templates = [];
+                resolve();
+              };
+            }),
+            new Promise<void>((resolve) => {
+              recipientsReq.onsuccess = () => {
+                (data as any).recipients = (recipientsReq.result || []).filter((r: any) => r.projectId === projectId);
+                resolve();
+              };
+              recipientsReq.onerror = () => {
+                (data as any).recipients = [];
+                resolve();
+              };
+            }),
+            new Promise<void>((resolve) => {
+              certificatesReq.onsuccess = () => {
+                (data as any).certificates = (certificatesReq.result || []).filter((c: any) => c.projectId === projectId);
+                resolve();
+              };
+              certificatesReq.onerror = () => {
+                (data as any).certificates = [];
+                resolve();
+              };
+            }),
+          ]);
+
+          console.log('[ProjectDetail] Found project:', (data as any).name || 'not found');
+          setProject(data as Project);
           setLoading(false);
+          db.close();
+        };
+
+        getRequest.onerror = () => {
+          setError('Failed to load project');
+          setLoading(false);
+          db.close();
         };
       } catch (err) {
         console.error('[ProjectDetail] Error:', err);
@@ -98,7 +147,7 @@ export default function StudioProjectPage() {
     loadProject();
 
     return () => clearTimeout(timeout);
-  }, [projectId, loading]);
+  }, [projectId]);
 
   const deleteProject = async () => {
     if (!confirm('Delete this project? This cannot be undone.')) return;

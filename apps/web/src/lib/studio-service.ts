@@ -2,7 +2,7 @@
 // All CRUD operations run in the browser — no API calls needed
 /// <reference lib="dom" />
 
-const DB_NAME = 'certiforge-open-studio';
+const DB_NAME = 'certiforge-studio';
 const DB_VERSION = 2;
 
 export interface Project {
